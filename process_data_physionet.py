@@ -1,0 +1,218 @@
+import numpy as np
+import random
+import math
+import time
+import pandas as pd
+import json
+from os import listdir
+from seqehr import seq_seq_ehr
+
+
+class read_data():
+    """
+    Loading data
+    """
+    def __init__(self):
+        self.file_path = '/home/tingyi/physionet_data/training_setA/training/'
+        self.file_names = listdir(self.file_path)
+        self.train_prop = 0.7
+        self.test_prop = 0.3
+        self.total_size = 7000
+        self.total_logit = np.zeros(7000)
+        self.total_data = self.file_names[0:self.total_size]
+        self.train_data = self.file_names[0:14235]
+        self.test_data = self.file_names[14235:18302]
+        self.val_data = self.file_names[18302:20336]
+        self.sepsis_group = []
+        self.non_sepsis_group = []
+        self.total_data = []
+        self.total_data_label = []
+        self.total_gender_label = []
+        self.female_group = []
+        self.male_group = []
+        self.median_vital_signal = np.zeros(35)
+        self.std_vital_signal = np.zeros(35)
+        self.median_vital_signal_female = np.zeros(35)
+        self.std_vital_signal_female = np.zeros(35)
+        self.median_vital_signal_male = np.zeros(35)
+        self.std_vital_signal_male = np.zeros(35)
+        self.dic_item = {}
+        self.dic_item_female = {}
+        self.dic_item_male = {}
+        self.dic_item_sepsis = {}
+        self.dic_item_non_sepsis = {}
+        self.time_sequence = 24
+
+        self.ave_all = [ 8.38230435e+01,  9.75000000e+01,  3.69060000e+01,  1.18333333e+02,
+        7.71140148e+01,  5.90000000e+01,  1.81162791e+01,  0.00000000e+00,
+       -2.50000000e-01,  2.43333333e+01,  5.04195804e-01,  7.38666667e+00,
+        4.00504808e+01,  9.60000000e+01,  4.20000000e+01,  1.65000000e+01,
+        7.70000000e+01,  8.35000000e+00,  1.06000000e+02,  9.00000000e-01,
+        1.16250000e+00,  1.25333333e+02,  1.65000000e+00,  2.00000000e+00,
+        3.36666667e+00,  4.08000000e+00,  7.00000000e-01,  3.85000000e+00,
+        3.09000000e+01,  1.05000000e+01,  3.11000000e+01,  1.08333333e+01,
+        2.55875000e+02,  1.93708333e+02,  6.47200000e+01]
+
+        self.std_all = [1.40828962e+01, 2.16625304e+00, 5.53108392e-01, 1.66121889e+01,
+       1.08476132e+01, 9.94962122e+00, 3.59186362e+00, 0.00000000e+00,
+       3.89407506e+00, 3.91858658e+00, 2.04595954e-01, 5.93467422e-02,
+       7.72257867e+00, 8.87388075e+00, 5.77276895e+02, 1.79879091e+01,
+       1.36508822e+02, 6.95188900e-01, 5.09788015e+00, 1.43347221e+00,
+       3.75415153e+00, 4.03968485e+01, 1.71418146e+00, 3.15505742e-01,
+       1.17084555e+00, 4.77914796e-01, 3.62933460e+00, 9.91058703e+00,
+       4.60374699e+00, 1.64019340e+00, 1.68795640e+01, 6.23941196e+00,
+       1.75014175e+02, 1.03316340e+02, 1.62930171e+01]
+
+
+    def read_table(self,name):
+        name = self.file_path + name
+        self.patient_table = np.array(pd.read_table(name,sep="|"))
+        if 1 in self.patient_table[:, 40]:
+            label = 1
+            self.sepsis_on_set_time = np.where(self.patient_table[:, 40] == 1)[0][0]
+        else:
+            label = 0
+            self.sepsis_on_set_time = np.shape(self.patient_table)[0]/2
+
+        self.one_data_logit = label
+        self.return_value()
+
+
+
+    def return_value(self):
+        self.one_data_tensor = np.zeros((self.time_sequence, 35))
+        self.start_window = np.int(np.floor(self.sepsis_on_set_time - self.time_sequence + 1))
+        if self.start_window < 0:
+            self.start_window = 0
+
+        for i in range(35):
+            if self.std_all[i] == 0:
+                continue
+            else:
+                for j in range(self.time_sequence):
+                    time = j + self.start_window
+                    if j + self.start_window > self.patient_table.shape[0]-1:
+                        time = self.patient_table.shape[0]-1
+                    if np.isnan(self.patient_table[time,i]):
+                        continue
+                    else:
+                        self.one_data_tensor[j,i] = \
+                            (self.patient_table[time,i] - self.ave_all[i])/self.std_all[i]
+
+    def compute_ave(self):
+        self.single_ave_value = np.zeros(40)
+        for i in range(40):
+            single_column = [j for j in self.patient_table[:,i] if not np.isnan(j)]
+            if single_column == []:
+                continue
+            else:
+                ave = np.average(single_column)
+                self.single_ave_value[i] = ave
+
+    def compute_all_ave(self):
+        self.index_count = np.zeros(40)
+        self.ave_all_ = np.zeros(40)
+        for i in self.file_names:
+            #name = self.file_path + i
+            self.read_table(i)
+            self.compute_ave()
+            self.ave_all_ += self.single_ave_value
+            for j in range(40):
+                if not self.single_ave_value[j] == 0:
+                    self.index_count[j] += 1
+
+        self.ave_all = self.ave_all_/self.index_count
+
+
+    def generate_lib(self):
+        count = 0
+        for i in self.file_names:
+            if count > self.total_size:
+                break
+            name = self.file_path+i
+            patient_table = np.array(pd.read_table(name, sep="|"))
+
+            if 1 in patient_table[:,40]:
+                sepsis_on_set_time = np.where(patient_table[:, 40] == 1)[0][0]
+                if sepsis_on_set_time < 5:
+                    continue
+                else:
+                    self.sepsis_group.append(i)
+                    self.total_data.append(i)
+                    self.total_data_label.append(1)
+            else:
+                self.non_sepsis_group.append(i)
+                self.total_data.append(i)
+                self.total_data_label.append(0)
+
+            if patient_table[0,35] == 0:
+                self.female_group.append(i)
+                self.total_gender_label.append(0)
+            else:
+                self.male_group.append(i)
+                self.total_gender_label.append(1)
+
+            for j in range(35):
+                entry_mean = np.mean([l for l in patient_table[:, j] if not np.isnan(l)])
+                if np.isnan(entry_mean):
+                    continue
+                self.dic_item.setdefault(j,[]).append(entry_mean)
+                if patient_table[0, 35] == 0:
+                    self.dic_item_female.setdefault(j,[]).append(entry_mean)
+                else:
+                    self.dic_item_male.setdefault(j,[]).append(entry_mean)
+
+                if 1 in patient_table[:, 40]:
+                    self.dic_item_sepsis.setdefault(j,[]).append(entry_mean)
+                else:
+                    self.dic_item_non_sepsis.setdefault(j, []).append(entry_mean)
+
+
+
+            count += 1
+
+
+    def compute_ave_vital(self):
+        for j in range(35):
+            #median = np.median([i for i in self.mean_vital[:,j] if not np.isnan(i)])
+            #std = np.std([i for i in self.mean_vital[:,j] if not np.isnan(i)])
+            if j in self.dic_item.keys():
+                median = np.median(self.dic_item[j])
+                std = np.std(self.dic_item[j])
+                self.median_vital_signal[j] = median
+                self.std_vital_signal[j] =std
+
+
+    def divide_train_test(self):
+        data_length = len(self.total_data)
+        self.train_num = np.int(np.floor(data_length*self.train_prop))
+        self.train_data = self.total_data[0:self.train_num]
+        self.train_data_label = self.total_data_label[0:self.train_num]
+        self.train_data_gender_label = self.total_gender_label[0:self.train_num]
+        self.test_data = self.total_data[self.train_num:data_length]
+        self.test_data_label = self.total_data_label[self.train_num:data_length]
+        self.test_data_gender_label = self.total_gender_label[self.train_num:data_length]
+        self.train_sepsis_group = list(np.array(self.train_data)[np.where(np.array(self.train_data_label)==1)[0]])
+        self.train_non_sepsis_group = list(np.array(self.train_data)[np.where(np.array(self.train_data_label)==0)[0]])
+        self.train_female_group = list(np.array(self.train_data)[np.where(np.array(self.train_data_gender_label)==0)[0]])
+        self.train_male_group = list(np.array(self.train_data)[np.where(np.array(self.train_data_gender_label)==1)[0]])
+        self.test_female_group = list(np.array(self.test_data)[np.where(np.array(self.test_data_gender_label)==0)[0]])
+        self.test_male_group = list(np.array(self.test_data)[np.where(np.array(self.test_data_gender_label)==1)[0]])
+
+        self.train_female_group_label = list(
+            np.array(self.train_data_label)[np.where(np.array(self.train_data_gender_label)==0)[0]])
+        self.train_male_group_label = list(
+            np.array(self.train_data_label)[np.where(np.array(self.train_data_gender_label) == 1)[0]])
+        self.test_female_group_label = list(
+            np.array(self.test_data_label)[np.where(np.array(self.test_data_gender_label) == 0)[0]])
+        self.test_male_group_label = list(
+            np.array(self.test_data_label)[np.where(np.array(self.test_data_gender_label) == 1)[0]])
+
+
+
+
+
+
+if __name__ == "__main__":
+    read_d = read_data()
+    seq = seq_seq_ehr(read_d)
