@@ -5,7 +5,7 @@ import time
 import pandas as pd
 import json
 from os import listdir
-from seqehr import seq_seq_ehr
+from seqehr_origin import seq_seq_ehr
 
 
 class read_data():
@@ -63,6 +63,23 @@ class read_data():
        4.60374699e+00, 1.64019340e+00, 1.68795640e+01, 6.23941196e+00,
        1.75014175e+02, 1.03316340e+02, 1.62930171e+01]
 
+        self.standard = [96.0,112.4,62.4,75.1,21.6,61.2,232.1,1.9,2.9,33.2,7.33,41.9,3.2]
+        self.standard_name = ['HR','SBP','DBP','MBP','Resp','FiO2','Platelets','Creatinine','Lactate','BUN','PH',
+                              'PaCO2']
+        #self.index = [0,3,5,6,10,33,19,22,15,11,12]
+        self.index = [4,26,34,19]
+
+        self.cardiovas_index = 4
+        self.liver_index = 26
+        self.coagulation_index = 34
+        self.kidney_index = 19
+
+        self.cardiovas_standard = 0.1
+        self.liver_standard = 0.0
+        self.coag_standard = 0.3
+        self.kidney_standard = 0.8
+
+        self.sofa_standard = [0.1,0.0,0.3,0.8]
 
     def read_table(self,name):
         name = self.file_path + name
@@ -77,10 +94,11 @@ class read_data():
         self.one_data_logit = label
         self.return_value()
 
-
-
     def return_value(self):
         self.one_data_tensor = np.zeros((self.time_sequence, 35))
+        self.one_data_tensor_origin = np.zeros((self.time_sequence, 35))
+        self.one_data_sofa = np.zeros(4)
+        self.one_data_sofa_score = np.zeros(4)
         self.start_window = np.int(np.floor(self.sepsis_on_set_time - self.time_sequence + 1))
         if self.start_window < 0:
             self.start_window = 0
@@ -98,6 +116,51 @@ class read_data():
                     else:
                         self.one_data_tensor[j,i] = \
                             (self.patient_table[time,i] - self.ave_all[i])/self.std_all[i]
+                        self.one_data_tensor_origin[j,i] = self.patient_table[time,i]
+
+        self.one_data_sofa[0] = np.mean(self.one_data_tensor_origin[:,self.cardiovas_index])
+        self.one_data_sofa[1] = np.mean(self.one_data_tensor_origin[:,self.liver_index])
+        self.one_data_sofa[2] = np.mean(self.one_data_tensor_origin[:,self.coagulation_index])
+        self.one_data_sofa[3] = np.mean(self.one_data_tensor_origin[:,self.kidney_index])
+
+        if self.one_data_sofa[0] > 70 or self.one_data_sofa[0] == 70:
+            self.one_data_sofa_score[0] = 0
+        else:
+            self.one_data_sofa_score[0] = 1
+
+        if self.one_data_sofa[1]< 1.2:
+            self.one_data_sofa_score[1] = 0
+        elif self.one_data_sofa[1] == 1.2 or self.one_data_sofa[1] >1.2 and self.one_data_sofa[1]<1.9:
+            self.one_data_sofa_score[1] = 1
+        elif self.one_data_sofa[1] == 1.9 or self.one_data_sofa[1] > 1.9 and self.one_data_sofa[1] <5.9:
+            self.one_data_sofa_score[1] = 2
+        elif self.one_data_sofa[1] == 5.9 or self.one_data_sofa[1] >5.9 and self.one_data_sofa[1] <11.9:
+            self.one_data_sofa_score[1] = 3
+        else:
+            self.one_data_sofa_score[1] = 4
+
+        if self.one_data_sofa[2]>150 or self.one_data_sofa[2]==150:
+            self.one_data_sofa_score[2]=0
+        elif self.one_data_sofa[2]<150 and self.one_data_sofa[2]>100:
+            self.one_data_sofa_score[2] = 1
+        elif self.one_data_sofa[2] == 100 or self.one_data_sofa[2]<100 and self.one_data_sofa[2]>50:
+            self.one_data_sofa_score[2] = 2
+        elif self.one_data_sofa[2] == 50 or self.one_data_sofa[2]<50 and self.one_data_sofa[2]>20:
+            self.one_data_sofa_score[2] = 3
+        else:
+            self.one_data_sofa_score[2] = 4
+
+        if self.one_data_sofa[3] < 1.2:
+            self.one_data_sofa_score[3] = 0
+        elif self.one_data_sofa[3] == 1.2 or self.one_data_sofa[3]>1.2 and self.one_data_sofa[3]<1.9:
+            self.one_data_sofa_score[3] = 1
+        elif self.one_data_sofa[3] == 1.9 or self.one_data_sofa[3]>1.9 and self.one_data_sofa[3]<3.4:
+            self.one_data_sofa_score[3] = 2
+        elif self.one_data_sofa[3] == 3.4 or self.one_data_sofa[3]>3.4 and self.one_data_sofa[3]<4.9:
+            self.one_data_sofa_score[3] = 3
+        else:
+            self.one_data_sofa_score[3] = 4
+
 
     def compute_ave(self):
         self.single_ave_value = np.zeros(40)
