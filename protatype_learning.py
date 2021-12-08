@@ -50,6 +50,7 @@ class protatype_ehr():
         self.gaussian_mu = 0
         self.gaussian_sigma = 0.0001
         self.batch_size = 128
+        self.neg_size = self.batch_size
         self.vital_length = 8
         self.lab_length = 19
         self.blood_length = 27
@@ -175,21 +176,32 @@ class protatype_ehr():
 
         return positive_dot_prod_sum
 
-    def compute_negative_paris(self, z, negs):
+    def compute_negative_paris(self, z, global_pull_cohort,global_pull_control,label):
         z = tf.math.l2_normalize(z, axis=1)
-        p = tf.math.l2_normalize(p, axis=1)
 
-        similarity_matrix = tf.matmul(z, tf.transpose(p))
-        mask = tf.linalg.diag(tf.zeros(p.shape[0]), padding_value=1)
+        global_pull_cohort = tf.math.l2_normalize(global_pull_cohort, axis=1)
+        global_pull_control = tf.math.l2_normalize(global_pull_control, axis=1)
 
-        negative_dot_prods = tf.multiply(similarity_matrix, mask)
-        negative_dot_prods_sum = tf.reduce_sum(tf.math.exp(negative_dot_prods / self.tau), 1)
+        similarity_matrix_cohort = tf.matmul(z, tf.transpose(global_pull_cohort))
+        similarity_matrix_control = tf.matmul(z, tf.transpose(global_pull_control))
+
+        neg_cohort_sum = tf.reduce_sum(tf.math.exp(similarity_matrix_cohort / self.tau), 1)
+        self.check_neg_cohort_sum = neg_cohort_sum
+        neg_control_sum = tf.reduce_sum(tf.math.exp(similarity_matrix_control / self.tau), 1)
+        self.check_neg_control_sum = neg_control_sum
+        label = tf.cast(label,tf.int32)
+        self.check_label = label
+
+        neg_sum_both = tf.stack((neg_cohort_sum,neg_control_sum),1)
+        self.check_neg_sum_both = neg_sum_both
+        negative_dot_prods_sum = [neg_sum_both[i,label[i]] for i in range(z.shape[0])]
+        self.check_negative_dot_prods_sum = negative_dot_prods_sum
 
         return negative_dot_prods_sum
 
-    def info_nce_loss(self, z, p):
+    def info_nce_loss(self, z, p, global_pull_cohort,global_pull_control,label):
         positive_dot_prod_sum = self.compute_positive_pair(z,p)
-        negative_dot_prod_sum = self.compute_negative_paris(z,p)
+        negative_dot_prod_sum = self.compute_negative_paris(z,global_pull_cohort,global_pull_control,label)
 
         denominator = tf.math.add(positive_dot_prod_sum, negative_dot_prod_sum)
         nomalized_prob_log = tf.math.log(tf.math.divide(positive_dot_prod_sum, denominator))
@@ -424,8 +436,6 @@ class protatype_ehr():
         bce = tf.keras.losses.BinaryCrossentropy(from_logits=True)
         for step, (x_batch_train, y_batch_train) in enumerate(self.train_dataset):
 
-
-            x_batch_train_cohort =
             input_projection_batch = np.ones((self.batch_size,self.semantic_time_step,self.latent_dim))
             input_order = np.ones((self.batch_size, self.semantic_time_step))
 
@@ -505,6 +515,12 @@ class protatype_ehr():
             print(val_acc)
 
             for step, (x_batch_train, y_batch_train) in enumerate(self.train_dataset):
+
+                random_indices_cohort = np.random.choice(self.num_cohort,size=self.neg_size,replace=False)
+                random_indices_control = np.random.choice(self.num_control,size=self.neg_size,replace=False)
+
+                x_batch_train_cohort = self.memory_bank_cohort[random_indices_cohort,:,:]
+                x_batch_train_control = self.memory_bank_control[random_indices_control,:,:]
                 input_projection_batch = np.ones((x_batch_train.shape[0], self.semantic_time_step, self.latent_dim))
                 input_order = np.ones((x_batch_train.shape[0], self.semantic_time_step))
 
@@ -527,6 +543,9 @@ class protatype_ehr():
                 with tf.GradientTape() as tape:
 
                     extract_time, global_pull = self.model_extractor(x_batch_train)
+                    extract_time_cohort, global_pull_cohort = self.model_extractor(x_batch_train_cohort)
+                    extract_time_control, global_pull_control = self.model_extractor(x_batch_train_control)
+
                     prediction = self.projection_layer(global_pull)
                     self.check_global_pull = global_pull
                     projection_basis, projection_order = self.basis_model(
@@ -557,10 +576,14 @@ class protatype_ehr():
                     batch_semantic_embedding_whole = tf.reduce_sum(batch_semantic_embedding_whole,axis=0)
                     batch_semantic_embedding_whole = tf.reduce_sum(batch_semantic_embedding_whole,axis=1)
                     self.check_batch_semantic_embedding_whole = batch_semantic_embedding_whole
-                    semantic_time_progression_loss = self.info_nce_loss(batch_semantic_embedding_whole,global_pull)
+                    semantic_time_progression_loss = self.info_nce_loss(batch_semantic_embedding_whole,global_pull,
+                                                                        global_pull_cohort,global_pull_control,
+                                                                        y_batch_train)
                     bceloss = tf.keras.losses.BinaryCrossentropy()(y_batch_train,prediction)
 
                     loss = semantic_time_progression_loss + bceloss
+
+                    #loss = bceloss
 
                 self.check_loss = loss
                 #z1, z2 = self.att_lstm_model(data_aug1)[1], self.att_lstm_model(data_aug2)[0]
