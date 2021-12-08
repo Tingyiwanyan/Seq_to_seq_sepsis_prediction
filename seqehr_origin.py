@@ -41,7 +41,15 @@ class seq_seq_ehr():
         self.lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
             initial_learning_rate=1e-3,
             decay_steps=self.steps,
-            decay_rate=0.6)
+            decay_rate=0.5)
+
+        self.resp_rate_range = [12,16]
+        self.heart_rate_range = [60,100]
+        self.temp_range = [36,37]
+        self.map_range = [70,100]
+        self.sbp_range = [10,120]
+        self.dbp_range = [10,80]
+        self.relations = [[1, 1], [0, 1], [1, 0], [0.0], [1, 2], [2, 1], [2, 2], [0, 2], [2, 0]]
 
     def aquire_data(self, starting_index, data_set,length):
         data = np.zeros((length,self.time_sequence,35))
@@ -84,12 +92,51 @@ class seq_seq_ehr():
         with open(file_path + 'train_sofa.npy', 'rb') as f:
             self.train_sofa = np.load(f)
 
+        with open(file_path + 'train_origin_35.npy', 'rb') as f:
+            self.train_data_origin = np.load(f)
+
         self.train_dataset = tf.data.Dataset.from_tensor_slices((self.train_data, self.train_logit,self.train_sofa_score))
         self.train_dataset = self.train_dataset.shuffle(buffer_size=1024).batch(self.batch_size)
         cohort_index = np.where(self.train_logit == 1)[0]
         control_index = np.where(self.train_logit == 0)[0]
         self.memory_bank_cohort = self.train_data[cohort_index,:,:]
         self.memory_bank_control = self.train_data[control_index,:,:]
+
+    def create_memory_bank_prospect(self):
+        #self.train_data, self.train_logit,self.train_sofa,self.train_sofa_score = self.aquire_data(0, self.train_data, self.length_train)
+        #self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
+        #self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
+
+        file_path = '/home/tingyi/physionet_data/'
+        with open(file_path + 'train_34.npy', 'rb') as f:
+            self.train_data = np.load(f)
+        with open(file_path + 'train_logit_34.npy', 'rb') as f:
+            self.train_logit = np.load(f)
+        with open(file_path + 'train_origin_34.npy', 'rb') as f:
+            self.train_data_origin = np.load(f)
+        with open(file_path + 'train_mask_34.npy', 'rb') as f:
+            self.train_mask = np.load(f)
+
+        with open(file_path + 'val_34.npy', 'rb') as f:
+            self.val_data = np.load(f)
+        with open(file_path + 'val_logit_34.npy', 'rb') as f:
+            self.val_logit = np.load(f)
+        with open(file_path + 'val_origin_34.npy', 'rb') as f:
+            self.val_data_origin = np.load(f)
+        with open(file_path + 'val_mask_34.npy', 'rb') as f:
+            self.val_mask = np.load(f)
+
+        #index = np.array(self.read_d.missingness_95)
+        #self.train_data = self.train_data[:,:,index]
+        #self.val_data = self.val_data[:,:,index]
+
+
+        self.train_dataset = tf.data.Dataset.from_tensor_slices((self.train_data, self.train_logit))
+        self.train_dataset = self.train_dataset.shuffle(buffer_size=1024).batch(self.batch_size)
+        #cohort_index = np.where(self.train_logit == 1)[0]
+        #control_index = np.where(self.train_logit == 0)[0]
+        #self.memory_bank_cohort = self.train_data[cohort_index,:,:]
+        #self.memory_bank_control = self.train_data[control_index,:,:]
 
     def compute_positive_pair(self,z,p):
         p = tf.math.l2_normalize(p, axis=1)
@@ -288,7 +335,7 @@ class seq_seq_ehr():
         self.outputs4 = conv4_identity(self.outputs4)
         #self.outputs4 = layernorm4(self.outputs4)
 
-        return tf.keras.Model(inputs,self.outputs4,name='tcn_encoder')
+        return tf.keras.Model(inputs, [self.outputs4, self.outputs3, self.outputs2,self.outputs1], name='tcn_encoder')
 
 
     def lstm_encoder(self):
@@ -315,6 +362,7 @@ class seq_seq_ehr():
         #inputs = layers.Input((self.time_sequence,self.latent_dim))
         query_input = layers.Input((1,self.latent_dim))
         value_input = layers.Input((self.time_sequence-1,self.latent_dim))
+        #value_input = layers.Input((self.time_sequence, self.latent_dim))
         query_embedding = tf.keras.layers.Dense(
                     self.latent_dim,
                     #use_bias=False,
@@ -347,9 +395,211 @@ class seq_seq_ehr():
         self.local_info = local_info
         #global_encoding = tf.math.l2_normalize(tf.math.add(local_info,tf.squeeze(query_seq_encoding,1)))
         global_encoding = tf.math.add(local_info, tf.squeeze(query_seq_encoding, 1))
+        #global_encoding = self.local_info
         attention_squeez = tf.squeeze(attention,2)
 
         return tf.keras.Model([query_input,value_input],[value_seq_encoding,global_encoding,attention_squeez],name="self_att_layer")
+
+
+    def self_att_multi_layer(self):
+        """
+        implement self-attention multi-layer
+        """
+        #inputs = layers.Input((self.time_sequence,self.latent_dim))
+        query_input = layers.Input((1,self.latent_dim))
+        value_input = layers.Input((self.time_sequence-1,self.latent_dim))
+        value_input_sec = layers.Input((self.time_sequence-1,self.latent_dim))
+        value_input_3 = layers.Input((self.time_sequence-1,self.latent_dim))
+        value_input_4 = layers.Input((self.time_sequence - 1, self.latent_dim))
+        query_embedding = tf.keras.layers.Dense(
+                    self.latent_dim,
+                    #use_bias=False,
+                    kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+                    activation='relu'
+                )
+        value_embedding = tf.keras.layers.Dense(
+                    self.latent_dim,
+                    #use_bias=False,
+                    kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+                    activation='relu'
+                )
+        """
+        value_embedding2 = tf.keras.layers.Dense(
+            self.latent_dim,
+            # use_bias=False,
+            kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+            activation='relu'
+        )
+        value_embedding3 = tf.keras.layers.Dense(
+            self.latent_dim,
+            # use_bias=False,
+            kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+            activation='relu'
+        )
+        value_embedding4 = tf.keras.layers.Dense(
+            self.latent_dim,
+             #use_bias=False,
+            kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+            activation='relu'
+        )
+        """
+        #query_seq_encoding = tf.math.l2_normalize(query_embedding(query_input))
+        query_seq_encoding = query_embedding(query_input)
+        #value_seq_encoding = tf.math.l2_normalize(value_embedding(value_input))
+        value_seq_encoding = value_embedding(value_input)
+        value_seq_encoding2 = value_embedding(value_input_sec)
+        value_seq_encoding3 = value_embedding(value_input_3)
+        value_seq_encoding4 = value_embedding(value_input_4)
+        qv_attention = tf.matmul(value_seq_encoding,query_seq_encoding,transpose_b=True)
+        qv_attention2 = tf.matmul(value_seq_encoding2, query_seq_encoding, transpose_b=True)
+        qv_attention3 = tf.matmul(value_seq_encoding3, query_seq_encoding, transpose_b=True)
+        qv_attention4 = tf.matmul(value_seq_encoding4, query_seq_encoding, transpose_b=True)
+        self.check_av = qv_attention2
+
+        attention = tf.nn.softmax(qv_attention,1)
+        attention2 = tf.nn.softmax(qv_attention2,1)
+        attention3 = tf.nn.softmax(qv_attention3, 1)
+        attention4 = tf.nn.softmax(qv_attention4, 1)
+        #attention2 = tf.nn.softmax(tf.squeeze(tf.nn.softmax(qv_attention2, 1),2)*tf.squeeze(attention,2))
+
+        self.att = attention
+        self.att2 = attention2
+        self.att3 = attention3
+        self.att4 = attention4
+        #attention_broad = tf.broadcast_to(attention, value_seq_encoding.shape)
+        #output_val_local = tf.math.l2_normalize(tf.multiply(attention,value_seq_encoding))
+        output_val_local = tf.multiply(attention, value_seq_encoding)
+        output_val_local2 = tf.multiply(attention2, value_seq_encoding2)
+        output_val_local3 = tf.multiply(attention3, value_seq_encoding3)
+        output_val_local4 = tf.multiply(attention4, value_seq_encoding4)
+        self.output_val = output_val_local
+
+        self.query_seq = query_seq_encoding
+
+        local_info = tf.reduce_sum(output_val_local,1)
+        self.local_info = local_info
+        local_info2 = tf.reduce_sum(output_val_local2, 1)
+        self.local_info2 = local_info2
+        local_info3 = tf.reduce_sum(output_val_local3, 1)
+        self.local_info3 = local_info3
+        local_info4 = tf.reduce_sum(output_val_local4, 1)
+        self.local_info4 = local_info4
+        local_all = tf.math.add(local_info,local_info2)
+        local_all = tf.math.add(local_all,local_info3)
+        local_all = tf.math.add(local_all,local_info4)
+        #local_all = tf.math.add(local_info, local_info3)
+        #global_encoding = tf.math.l2_normalize(tf.math.add(local_info,tf.squeeze(query_seq_encoding,1)))
+        #global_encoding = tf.math.add((local_info, local_info2, 1))
+        global_encoding = tf.math.add(local_all, tf.squeeze(query_seq_encoding, 1))
+        self.query_seq = query_seq_encoding
+        attention_squeez = tf.squeeze(attention,2)
+        attention_squeez2 = tf.squeeze(attention2,2)
+        attention_squeez3 = tf.squeeze(attention3,2)
+        attention_squeez4 = tf.squeeze(attention4,2)
+
+        return tf.keras.Model([query_input,value_input,value_input_sec,value_input_3,value_input_4],
+                              [value_seq_encoding,global_encoding,
+                               attention_squeez,attention_squeez2,attention_squeez3,attention_squeez4],name="self_att_layer")
+
+    def self_att_multi_layer_prospect(self):
+        """
+        implement self-attention multi-layer
+        """
+        #inputs = layers.Input((self.time_sequence,self.latent_dim))
+        query_input = layers.Input((self.time_sequence,self.latent_dim))
+        value_input = layers.Input((self.time_sequence-1,self.latent_dim))
+        value_input_sec = layers.Input((self.time_sequence-1,self.latent_dim))
+        value_input_3 = layers.Input((self.time_sequence-1,self.latent_dim))
+        value_input_4 = layers.Input((self.time_sequence - 1, self.latent_dim))
+        query_embedding = tf.keras.layers.Dense(
+                    self.latent_dim,
+                    #use_bias=False,
+                    kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+                    activation='relu'
+                )
+        value_embedding = tf.keras.layers.Dense(
+                    self.latent_dim,
+                    #use_bias=False,
+                    kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+                    activation='relu'
+                )
+
+        value_embedding2 = tf.keras.layers.Dense(
+            self.latent_dim,
+            # use_bias=False,
+            kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+            activation='relu'
+        )
+        value_embedding3 = tf.keras.layers.Dense(
+            self.latent_dim,
+            # use_bias=False,
+            kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+            activation='relu'
+        )
+        value_embedding4 = tf.keras.layers.Dense(
+            self.latent_dim,
+             use_bias=False,
+            kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+            activation='relu'
+        )
+
+        #query_seq_encoding = tf.math.l2_normalize(query_embedding(query_input))
+        query_seq_encoding = query_embedding(query_input)
+        #value_seq_encoding = tf.math.l2_normalize(value_embedding(value_input))
+        value_seq_encoding = value_embedding(value_input)
+        value_seq_encoding2 = value_embedding2(value_input_sec)
+        value_seq_encoding3 = value_embedding3(value_input_3)
+        value_seq_encoding4 = value_embedding4(value_input_4)
+        qv_attention = tf.matmul(value_seq_encoding,query_seq_encoding,transpose_b=True)
+        qv_attention2 = tf.matmul(value_seq_encoding2, query_seq_encoding, transpose_b=True)
+        qv_attention3 = tf.matmul(value_seq_encoding3, query_seq_encoding, transpose_b=True)
+        qv_attention4 = tf.matmul(value_seq_encoding4, query_seq_encoding, transpose_b=True)
+        self.check_av = qv_attention2
+
+        attention = tf.nn.softmax(qv_attention,1)
+        attention2 = tf.nn.softmax(qv_attention2,1)
+        attention3 = tf.nn.softmax(qv_attention3, 1)
+        attention4 = tf.nn.softmax(qv_attention4, 1)
+        #attention2 = tf.nn.softmax(tf.squeeze(tf.nn.softmax(qv_attention2, 1),2)*tf.squeeze(attention,2))
+
+        self.att = attention
+        self.att2 = attention2
+        self.att3 = attention3
+        self.att4 = attention4
+        #attention_broad = tf.broadcast_to(attention, value_seq_encoding.shape)
+        #output_val_local = tf.math.l2_normalize(tf.multiply(attention,value_seq_encoding))
+        output_val_local = tf.multiply(attention, value_seq_encoding)
+        output_val_local2 = tf.multiply(attention2, value_seq_encoding2)
+        output_val_local3 = tf.multiply(attention3, value_seq_encoding3)
+        output_val_local4 = tf.multiply(attention4, value_seq_encoding4)
+        self.output_val = output_val_local
+
+        self.query_seq = query_seq_encoding
+
+        local_info = tf.reduce_sum(output_val_local,1)
+        self.local_info = local_info
+        local_info2 = tf.reduce_sum(output_val_local2, 1)
+        self.local_info2 = local_info2
+        local_info3 = tf.reduce_sum(output_val_local3, 1)
+        self.local_info3 = local_info3
+        local_info4 = tf.reduce_sum(output_val_local4, 1)
+        self.local_info4 = local_info4
+        local_all = tf.math.add(local_info,local_info2)
+        local_all = tf.math.add(local_all,local_info3)
+        local_all = tf.math.add(local_all,local_info4)
+        #local_all = tf.math.add(local_info, local_info4)
+        #global_encoding = tf.math.l2_normalize(tf.math.add(local_info,tf.squeeze(query_seq_encoding,1)))
+        #global_encoding = tf.math.add((local_info, local_info2, 1))
+        global_encoding = tf.math.add(local_all, tf.squeeze(query_seq_encoding, 1))
+        self.query_seq = query_seq_encoding
+        attention_squeez = tf.squeeze(attention,2)
+        attention_squeez2 = tf.squeeze(attention2,2)
+        attention_squeez3 = tf.squeeze(attention3,2)
+        attention_squeez4 = tf.squeeze(attention4,2)
+
+        return tf.keras.Model([query_input,value_input,value_input_sec,value_input_3,value_input_4],
+                              [value_seq_encoding,global_encoding,
+                               attention_squeez,attention_squeez2,attention_squeez3,attention_squeez4],name="self_att_layer")
 
 
     def lstm_split(self):
@@ -357,23 +607,49 @@ class seq_seq_ehr():
         output1 = inputs[:,-1,:]
         output1 = tf.expand_dims(output1,1)
         output2 = inputs[:,0:-1,:]
+        #output2 = inputs
 
         return tf.keras.Model(inputs,[output1,output2],name='lstm_split')
 
+    def lstm_split_multi(self):
+        inputs = layers.Input((self.time_sequence,self.latent_dim))
+        inputs2 = layers.Input((self.time_sequence,self.latent_dim))
+        inputs3 = layers.Input((self.time_sequence, self.latent_dim))
+        inputs4 = layers.Input((self.time_sequence, self.latent_dim))
+        output1 = inputs[:,-1,:]
+        output_query1 = tf.expand_dims(output1,1)
+
+        output2 = inputs[:,0:-1,:]
+        output3 = inputs2[:,0:-1,:]
+        output4 = inputs3[:,0:-1,:]
+        output5 = inputs4[:, 0:-1, :]
+        #output2 = inputs
+
+        return tf.keras.Model([inputs,inputs2,inputs3,inputs4],
+                              [output_query1,output2,output3,output4,output5],name='lstm_split')
+
     def lstm_merge(self):
         input1 = layers.Input((self.time_sequence-1,self.latent_dim))
+        #input1 = layers.Input((self.time_sequence, self.latent_dim))
         input2 = layers.Input((self.latent_dim))
         input3 = layers.Input((self.time_sequence-1))
+        input4 = layers.Input((self.time_sequence-1))
+        input5 = layers.Input((self.time_sequence-1))
+        input6 = layers.Input((self.time_sequence-1))
+        #input3 = layers.Input((self.time_sequence))
 
         output = input2
 
-        return tf.keras.Model([input1,input2,input3],output,name='lstm_merge')
+        return tf.keras.Model([input1,input2,input3,input4,input5,input6],output,name='lstm_merge')
 
     def lstm_pooling(self):
         inputs = layers.Input((self.time_sequence,self.latent_dim))
+        inputs1 = layers.Input((self.time_sequence,self.latent_dim))
+        inputs2 = layers.Input((self.time_sequence,self.latent_dim))
+        inputs3 = layers.Input((self.time_sequence,self.latent_dim))
         output = inputs[:,-1,:]
 
-        return tf.keras.Model(inputs,output,name="lstm_pooling")
+        return tf.keras.Model([inputs,inputs1,inputs2,inputs3],output,name="lstm_pooling")
 
     def lstm_ave_pooling(self):
         inputs = layers.Input((self.time_sequence,self.latent_dim))
@@ -399,7 +675,7 @@ class seq_seq_ehr():
         model = tf.keras.Sequential(
             [
                 # Note the AutoEncoder-like structure.
-                layers.Input((self.latent_dim,)),
+                layers.Input((self.latent_dim)),
                 layers.Dense(
                     1,
                     #use_bias=False,
@@ -688,19 +964,24 @@ class seq_seq_ehr():
         buuild non att model
         """
         inputs = layers.Input((self.time_sequence, 35))
+        inputs_mask = layers.Masking(mask_value=0, input_shape=(self.time_sequence, 35))(inputs)
         #self.lstm = self.lstm_encoder()
         self.lstm = self.tcn_encoder_second_last_level()
         self.lstm_pool = self.lstm_pooling()
         self.projector = self.project_logit()
 
+        #mask = inputs_mask(inputs)
         lstm = self.lstm(inputs)
         lstm_pool = self.lstm_pool(lstm)
         projector = self.projector(lstm_pool)
+
+        #self.model_mask = tf.keras.Model(inputs,mask,name="mask")
 
         self.model = tf.keras.Model(inputs, projector, name="lstm_model")
         optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
         self.model.compile(optimizer=optimizer, loss=tf.keras.losses.BinaryCrossentropy(),
                            metrics=[tf.keras.metrics.AUC()])
+        #self.train_data = np.zeros((self.train_logit.shape[0], self.time_sequence, 35))
 
     def build_model_pre(self):
         inputs = layers.Input((self.time_sequence, 35))
@@ -730,8 +1011,8 @@ class seq_seq_ehr():
         """
         attention mechanism
         """
-        self.lstm_sp = self.lstm_split()
-        self.self_att = self.self_att_layer()
+        self.lstm_sp = self.lstm_split_multi()
+        self.self_att = self.self_att_multi_layer()
         self.global_extractor = self.lstm_merge()
         #self.lstm = self.tcn_encoder()
 
@@ -747,6 +1028,7 @@ class seq_seq_ehr():
         global_extractor = self.global_extractor(self_att)
         projector = self.projector(global_extractor)
 
+        self.model_test = tf.keras.Model(inputs,self_att,name='att_test')
         self.model = tf.keras.Model(inputs, projector, name="att_lstm_model")
         optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
         self.model.compile(optimizer=optimizer,loss=tf.keras.losses.BinaryCrossentropy(),
@@ -801,3 +1083,354 @@ class seq_seq_ehr():
         axs[9].plot(seq.train_data[6,:,9])
         axs[10].plot(seq.train_data[6,:,10])
         axs[11].plot(seq.train_data[6,:,11])
+
+
+
+    def collect_stat(self):
+        cohort = np.where(self.train_logit==1)[0]
+        self.total_valid_cohort = []
+        self.increase_relation_hr = []
+        self.decrease_relation_hr = []
+        self.increase_relation_po_in = []
+        self.decrease_relation_po_in = []
+        self.increase_relation_po_de = []
+        self.decrease_relation_po_de = []
+        self.ave_value_hr = 0
+        self.ave_value_po = 0
+        self.index_hr = 0
+        self.index_po = 0
+
+
+        for i in cohort:
+            sample = np.expand_dims(self.train_data[i,:,:],0)
+            att = self.model_test(sample)[5]
+            att_location = np.where(att==np.max(att))[1][0]
+            if att_location+1 < 3:
+                continue
+            hr = self.train_data[i,att_location+1-3:att_location+1,0]
+            length = len(np.where(hr==0)[0])
+            if length > 1:
+                continue
+            min_loc = np.where(hr==np.min(hr))[0]
+            if len(min_loc)>1:
+                min_loc=min_loc[0]
+            max_loc = np.where(hr==np.max(hr))[0]
+            if len(max_loc)>1:
+                max_loc=max_loc[0]
+
+            if min_loc<max_loc:
+                self.increase_relation_hr.append(i)
+            else:
+                self.decrease_relation_hr.append(i)
+            self.total_valid_cohort.append(i)
+            ave = (min_loc+max_loc)/2
+            self.ave_value_hr+=ave
+            self.index_hr+=1
+
+        for i in self.increase_relation_hr:
+            sample = np.expand_dims(self.train_data[i, :, :], 0)
+            att = self.model_test(sample)[5]
+            att_location = np.where(att == np.max(att))[1][0]
+            if att_location + 1 < 3:
+                continue
+            hr = self.train_data[i, att_location + 1 - 3:att_location + 1, 1]
+            length = len(np.where(hr == 0)[0])
+            if length > 1:
+                continue
+            min_loc = np.where(hr == np.min(hr))[0]
+            if len(min_loc) > 1:
+                min_loc = min_loc[0]
+            max_loc = np.where(hr == np.max(hr))[0]
+            if len(max_loc) > 1:
+                max_loc = max_loc[0]
+
+            if min_loc < max_loc:
+                self.increase_relation_po_in.append(i)
+            else:
+                self.decrease_relation_po_in.append(i)
+
+            ave = (min_loc+max_loc)/2
+            self.ave_value_po +=ave
+            self.index_po+=1
+
+        for i in self.decrease_relation_hr:
+            sample = np.expand_dims(self.train_data[i, :, :], 0)
+            att = self.model_test(sample)[5]
+            att_location = np.where(att == np.max(att))[1][0]
+            if att_location + 1 < 3:
+                continue
+            hr = self.train_data[i, att_location + 1 - 3:att_location + 1, 1]
+            length = len(np.where(hr == 0)[0])
+            if length > 1:
+                continue
+            min_loc = np.where(hr == np.min(hr))[0]
+            if len(min_loc) > 1:
+                min_loc = min_loc[0]
+            max_loc = np.where(hr == np.max(hr))[0]
+            if len(max_loc) > 1:
+                max_loc = max_loc[0]
+
+            if min_loc < max_loc:
+                self.increase_relation_po_de.append(i)
+            else:
+                self.decrease_relation_po_de.append(i)
+
+            ave = (min_loc+max_loc)/2
+            self.ave_value_po +=ave
+            self.index_po+=1
+
+    def collect_stat_relation_hr(self):
+        cohort = np.where(self.train_logit==1)[0]
+        self.total_relations = []
+
+        for i in cohort:
+            sample = np.expand_dims(self.train_data[i,:,:],0)
+            self.att = np.array(self.model_test(sample)[5])[0]
+            if len(np.where(self.att>0.05)[0]) == 0:
+                continue
+            att_location_first = np.where(self.att>0.05)[0][0]
+            att_location_sec = np.where(self.att > 0.05)[0][-1]
+            relation = [0,0]
+            if att_location_first+1<3:
+                hr = self.train_data_origin[i,att_location_first,0]
+                if hr < self.heart_rate_range[0]:
+                    relation[0] = 0
+                elif hr > self.heart_rate_range[1]:
+                    relation[0] = 2
+                else:
+                    relation[0] = 1
+            else:
+                hr = np.median(self.train_data_origin[i, att_location_first+1-3:att_location_first+1, 0])
+                if hr < self.heart_rate_range[0]:
+                    relation[0] = 0
+                elif hr > self.heart_rate_range[1]:
+                    relation[0] = 2
+                else:
+                    relation[0] = 1
+
+            if att_location_sec+1<3:
+                hr = self.train_data_origin[i,att_location_sec,0]
+                if hr < self.heart_rate_range[0]:
+                    relation[1] = 0
+                elif hr > self.heart_rate_range[1]:
+                    relation[1] = 2
+                else:
+                    relation[1] = 1
+            else:
+                hr = np.median(self.train_data_origin[i, att_location_sec+1-3:att_location_sec+1, 0])
+                if hr < self.heart_rate_range[0]:
+                    relation[1] = 0
+                elif hr > self.heart_rate_range[1]:
+                    relation[1] = 2
+                else:
+                    relation[1] = 1
+
+            self.total_relations.append(relation)
+
+    def collect_stat_relation_resp(self):
+        cohort = np.where(self.train_logit==1)[0]
+        self.total_relations = []
+
+        for i in cohort:
+            sample = np.expand_dims(self.train_data[i,:,:],0)
+            self.att = np.array(self.model_test(sample)[5])[0]
+            if len(np.where(self.att>0.05)[0]) == 0:
+                continue
+            att_location_first = np.where(self.att>0.05)[0][0]
+            att_location_sec = np.where(self.att > 0.05)[0][-1]
+            relation = [0,0]
+            if att_location_first+1<3:
+                hr = self.train_data_origin[i,att_location_first,6]
+                if hr < self.resp_rate_range[0]:
+                    relation[0] = 0
+                elif hr > self.resp_rate_range[1]:
+                    relation[0] = 2
+                else:
+                    relation[0] = 1
+            else:
+                hr = np.median(self.train_data_origin[i, att_location_first+1-3:att_location_first+1, 0])
+                if hr < self.resp_rate_range[0]:
+                    relation[0] = 0
+                elif hr > self.resp_rate_range[1]:
+                    relation[0] = 2
+                else:
+                    relation[0] = 1
+
+            if att_location_sec+1<3:
+                hr = self.train_data_origin[i,att_location_sec,6]
+                if hr < self.resp_rate_range[0]:
+                    relation[1] = 0
+                elif hr > self.resp_rate_range[1]:
+                    relation[1] = 2
+                else:
+                    relation[1] = 1
+            else:
+                hr = np.median(self.train_data_origin[i, att_location_sec+1-3:att_location_sec+1, 0])
+                if hr < self.resp_rate_range[0]:
+                    relation[1] = 0
+                elif hr > self.resp_rate_range[1]:
+                    relation[1] = 2
+                else:
+                    relation[1] = 1
+
+            self.total_relations.append(relation)
+
+    def collect_stat_relation_map(self):
+        cohort = np.where(self.train_logit==1)[0]
+        self.total_relations = []
+
+        for i in cohort:
+            sample = np.expand_dims(self.train_data[i,:,:],0)
+            self.att = np.array(self.model_test(sample)[5])[0]
+            if len(np.where(self.att>0.05)[0]) == 0:
+                continue
+            att_location_first = np.where(self.att>0.05)[0][0]
+            att_location_sec = np.where(self.att > 0.05)[0][-1]
+            relation = [0,0]
+            if att_location_first+1<3:
+                hr = self.train_data_origin[i,att_location_first,4]
+                if hr < self.map_range[0]:
+                    relation[0] = 0
+                elif hr > self.map_range[1]:
+                    relation[0] = 2
+                else:
+                    relation[0] = 1
+            else:
+                hr = np.median(self.train_data_origin[i, att_location_first+1-3:att_location_first+1, 0])
+                if hr < self.map_range[0]:
+                    relation[0] = 0
+                elif hr > self.map_range[1]:
+                    relation[0] = 2
+                else:
+                    relation[0] = 1
+
+            if att_location_sec+1<3:
+                hr = self.train_data_origin[i,att_location_sec,4]
+                if hr < self.map_range[0]:
+                    relation[1] = 0
+                elif hr > self.map_range[1]:
+                    relation[1] = 2
+                else:
+                    relation[1] = 1
+            else:
+                hr = np.median(self.train_data_origin[i, att_location_sec+1-3:att_location_sec+1, 0])
+                if hr < self.map_range[0]:
+                    relation[1] = 0
+                elif hr > self.map_range[1]:
+                    relation[1] = 2
+                else:
+                    relation[1] = 1
+
+            self.total_relations.append(relation)
+
+    def collect_stat_relation_sbp(self):
+        cohort = np.where(self.train_logit==1)[0]
+        self.total_relations = []
+
+        for i in cohort:
+            sample = np.expand_dims(self.train_data[i,:,:],0)
+            self.att = np.array(self.model_test(sample)[5])[0]
+            if len(np.where(self.att>0.05)[0]) == 0:
+                continue
+            att_location_first = np.where(self.att>0.05)[0][0]
+            att_location_sec = np.where(self.att > 0.05)[0][-1]
+            relation = [0,0]
+            if att_location_first+1<3:
+                hr = self.train_data_origin[i,att_location_first,3]
+                if hr < self.sbp_range[0]:
+                    relation[0] = 0
+                elif hr > self.sbp_range[1]:
+                    relation[0] = 2
+                else:
+                    relation[0] = 1
+            else:
+                hr = np.median(self.train_data_origin[i, att_location_first+1-3:att_location_first+1, 0])
+                if hr < self.sbp_range[0]:
+                    relation[0] = 0
+                elif hr > self.sbp_range[1]:
+                    relation[0] = 2
+                else:
+                    relation[0] = 1
+
+            if att_location_sec+1<3:
+                hr = self.train_data_origin[i,att_location_sec,3]
+                if hr < self.sbp_range[0]:
+                    relation[1] = 0
+                elif hr > self.sbp_range[1]:
+                    relation[1] = 2
+                else:
+                    relation[1] = 1
+            else:
+                hr = np.median(self.train_data_origin[i, att_location_sec+1-3:att_location_sec+1, 0])
+                if hr < self.sbp_range[0]:
+                    relation[1] = 0
+                elif hr > self.sbp_range[1]:
+                    relation[1] = 2
+                else:
+                    relation[1] = 1
+
+            self.total_relations.append(relation)
+
+    def collect_stat_relation_dbp(self):
+        cohort = np.where(self.train_logit==1)[0]
+        self.total_relations = []
+
+        for i in cohort:
+            sample = np.expand_dims(self.train_data[i,:,:],0)
+            self.att = np.array(self.model_test(sample)[5])[0]
+            if len(np.where(self.att>0.05)[0]) == 0:
+                continue
+            att_location_first = np.where(self.att>0.05)[0][0]
+            att_location_sec = np.where(self.att > 0.05)[0][-1]
+            relation = [0,0]
+            if att_location_first+1<3:
+                hr = self.train_data_origin[i,att_location_first,5]
+                if hr < self.dbp_range[0]:
+                    relation[0] = 0
+                elif hr > self.dbp_range[1]:
+                    relation[0] = 2
+                else:
+                    relation[0] = 1
+            else:
+                hr = np.median(self.train_data_origin[i, att_location_first+1-3:att_location_first+1, 0])
+                if hr < self.dbp_range[0]:
+                    relation[0] = 0
+                elif hr > self.dbp_range[1]:
+                    relation[0] = 2
+                else:
+                    relation[0] = 1
+
+            if att_location_sec+1<3:
+                hr = self.train_data_origin[i,att_location_sec,5]
+                if hr < self.dbp_range[0]:
+                    relation[1] = 0
+                elif hr > self.dbp_range[1]:
+                    relation[1] = 2
+                else:
+                    relation[1] = 1
+            else:
+                hr = np.median(self.train_data_origin[i, att_location_sec+1-3:att_location_sec+1, 0])
+                if hr < self.dbp_range[0]:
+                    relation[1] = 0
+                elif hr > self.dbp_range[1]:
+                    relation[1] = 2
+                else:
+                    relation[1] = 1
+
+            self.total_relations.append(relation)
+
+    def compute_relation_numbers(self):
+        self.total_relation_num = np.zeros(9)
+        for i in range(len(self.relations)):
+            num = 0
+            for j in self.total_relations:
+                if j == self.relations[i]:
+                    num+=1
+            self.total_relation_num[i] = num
+
+
+
+
+
+
+

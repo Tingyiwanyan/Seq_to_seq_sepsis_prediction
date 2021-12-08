@@ -46,6 +46,7 @@ class seq_seq_ehr():
             data[i,:,:] = one_data
             logit_dp[i,0] = self.read_d.one_data_logit
 
+
         logit = logit_dp[:,0]
         return (data, logit)
 

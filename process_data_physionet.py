@@ -6,6 +6,8 @@ import pandas as pd
 import json
 from os import listdir
 from seqehr_origin import seq_seq_ehr
+from protatype_learning import protatype_ehr, projection
+#from tcn_prospective import seq_seq_ehr
 
 
 class read_data():
@@ -66,7 +68,28 @@ class read_data():
         self.standard = [96.0,112.4,62.4,75.1,21.6,61.2,232.1,1.9,2.9,33.2,7.33,41.9,3.2]
         self.standard_name = ['HR','SBP','DBP','MBP','Resp','FiO2','Platelets','Creatinine','Lactate','BUN','PH',
                               'PaCO2']
+
+        self.names = ['HR', 'O2Sat', 'Temp', 'SBP', 'MAP', 'DBP', 'Resp', 'EtCO2',
+       'BaseExcess', 'HCO3', 'FiO2', 'pH', 'PaCO2', 'SaO2', 'AST', 'BUN',
+       'Alkalinephos', 'Calcium', 'Chloride', 'Creatinine', 'Bilirubin_direct',
+       'Glucose', 'Lactate', 'Magnesium', 'Phosphate', 'Potassium',
+       'Bilirubin_total', 'TroponinI', 'Hct', 'Hgb', 'PTT', 'WBC',
+       'Fibrinogen', 'Platelets', 'Age', 'Gender', 'Unit1', 'Unit2',
+       'HospAdmTime', 'ICULOS', 'SepsisLabel']
         #self.index = [0,3,5,6,10,33,19,22,15,11,12]
+
+        self.missingness_all = [0.08236603, 0.12678666, 0.65877425, 0.15378036, 0.1088652 ,
+       0.50510896, 0.104005  , 1.        , 0.89657094, 0.91816108,
+       0.86952604, 0.88554305, 0.9132697 , 0.9497429 , 0.98520725,
+       0.91700666, 0.98564741, 0.95106905, 0.91522709, 0.93263183,
+       0.99864895, 0.87366508, 0.96673776, 0.9227391 , 0.95044262,
+       0.8898439 , 0.98793365, 0.99876108, 0.87908121, 0.90976203,
+       0.95157457, 0.9233135 , 0.99264736, 0.93361607]
+
+        self.missingness_9 = [ 0,  1,  2,  3,  4,  5,  6,  8, 10, 11, 21, 25, 28]
+        self.missingness_95 = [ 0,  1,  2,  3,  4,  5,  6,  8,  9, 10, 11, 12, 13, 15, 18, 19, 21,
+        23, 25, 28, 29, 31, 33]
+
         self.index = [4,26,34,19]
 
         self.cardiovas_index = 4
@@ -94,16 +117,94 @@ class read_data():
         self.one_data_logit = label
         self.return_value()
 
+
+
+    def read_table_prospective(self,name):
+        name = self.file_path + name
+        self.patient_table = np.array(pd.read_table(name, sep="|"))
+        self.one_data_mask = np.zeros(self.time_sequence)
+        self.one_data_logit = np.zeros(self.time_sequence)
+        self.one_data_logit_ = self.patient_table[:,40]
+        length_time = self.one_data_logit_.shape[0]
+        if 1 in self.one_data_logit_:
+            self.one_data_logit = np.ones(self.time_sequence)
+        if length_time > self.time_sequence:
+            self.one_data_logit = self.one_data_logit_[0:self.time_sequence]
+            self.one_data_mask = np.ones(self.time_sequence)
+        else:
+            self.one_data_logit[0:length_time] = self.one_data_logit_
+            self.one_data_mask[0:length_time] = np.ones(length_time)
+
+        self.return_value_prospective()
+
+    def return_value_prospective(self):
+        self.one_data_tensor = np.zeros((self.time_sequence, 34))
+        self.one_data_tensor_origin = np.zeros((self.time_sequence, 34))
+        length_data = self.patient_table.shape[0]
+        length_final = np.min((length_data,self.time_sequence))
+        for i in range(34):
+            if self.std_all[i] == 0:
+                continue
+            else:
+                for j in range(length_final):
+                    time = j
+                    if np.isnan(self.patient_table[time,i]):
+                        continue
+                    else:
+                        self.one_data_tensor[j, i] = \
+                            (self.patient_table[time, i] - self.ave_all[i]) / self.std_all[i]
+                        self.one_data_tensor_origin[j, i] = self.patient_table[time, i]
+
+
+    def aquire_data_prospect(self,data):
+        length = len(data)
+        self.data = np.zeros((length,self.time_sequence,34))
+        self.data_origin = np.zeros((length,self.time_sequence,34))
+        self.logit = np.zeros((length,self.time_sequence))
+        self.mask = np.zeros((length,self.time_sequence))
+        for i in range(length):
+            name = data[i]
+            self.read_table_prospective(name)
+            self.data[i,:,:] = self.one_data_tensor
+            self.data_origin[i,:,:] = self.one_data_tensor_origin
+            self.logit[i,:] = self.one_data_logit
+            self.mask[i,:] = self.one_data_mask
+
+        for i in range(length):
+            if 0 in self.mask[i,:]:
+                index = np.where(self.mask[i,:]==0)[0][0]
+                self.data[i,index:,:] = self.data[i,index-1,:]
+
+    def aquire_data(self,data):
+        length = len(data)
+        self.data = np.zeros((length,self.time_sequence,34))
+        self.data_origin = np.zeros((length,self.time_sequence,34))
+        self.logit = np.zeros((length,self.time_sequence))
+        self.mask = np.zeros((length,self.time_sequence))
+        for i in range(length):
+            name = data[i]
+            self.read_table(name)
+            self.data[i,:,:] = self.one_data_tensor
+            self.data_origin[i,:,:] = self.one_data_tensor_origin
+            self.logit[i,:] = self.one_data_logit
+
+
+    def store_train_data(self):
+        file_path = '/home/tingyi/physionet_data/'
+        with open(file_path + 'train_34.npy', 'wb') as f:
+            np.save(f,self.data)
+
+
     def return_value(self):
-        self.one_data_tensor = np.zeros((self.time_sequence, 35))
-        self.one_data_tensor_origin = np.zeros((self.time_sequence, 35))
+        self.one_data_tensor = np.zeros((self.time_sequence, 34))
+        self.one_data_tensor_origin = np.zeros((self.time_sequence, 34))
         self.one_data_sofa = np.zeros(4)
         self.one_data_sofa_score = np.zeros(4)
         self.start_window = np.int(np.floor(self.sepsis_on_set_time - self.time_sequence + 1))
         if self.start_window < 0:
             self.start_window = 0
 
-        for i in range(35):
+        for i in range(34):
             if self.std_all[i] == 0:
                 continue
             else:
@@ -117,7 +218,7 @@ class read_data():
                         self.one_data_tensor[j,i] = \
                             (self.patient_table[time,i] - self.ave_all[i])/self.std_all[i]
                         self.one_data_tensor_origin[j,i] = self.patient_table[time,i]
-
+        """
         self.one_data_sofa[0] = np.mean(self.one_data_tensor_origin[:,self.cardiovas_index])
         self.one_data_sofa[1] = np.mean(self.one_data_tensor_origin[:,self.liver_index])
         self.one_data_sofa[2] = np.mean(self.one_data_tensor_origin[:,self.coagulation_index])
@@ -160,6 +261,24 @@ class read_data():
             self.one_data_sofa_score[3] = 3
         else:
             self.one_data_sofa_score[3] = 4
+        """
+
+    def compute_missing(self):
+        self.missingness = np.zeros(34)
+        for i in range(34):
+            missing_ratio = (np.where(np.isnan(self.patient_table[:,i]))[0].shape[0])/self.patient_table.shape[0]
+            self.missingness[i] = missing_ratio
+
+
+    def compute_missingness_all(self):
+        self.missingness_all_ = np.zeros(34)
+        self.index_missing = 0
+        for i in self.train_data:
+            self.read_table(i)
+            self.compute_missing()
+            self.missingness_all_ += self.missingness
+            self.index_missing += 1
+        self.missingness_all = self.missingness_all_/self.index_missing
 
 
     def compute_ave(self):
@@ -278,4 +397,5 @@ class read_data():
 
 if __name__ == "__main__":
     read_d = read_data()
-    seq = seq_seq_ehr(read_d)
+    #seq = seq_seq_ehr(read_d)
+    seq = protatype_ehr(read_d,projection)
