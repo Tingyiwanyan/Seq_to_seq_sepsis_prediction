@@ -6,13 +6,14 @@ from tcn import TCN
 from tensorflow import keras
 from scipy.stats import ortho_group
 from sklearn.metrics import roc_auc_score
+import numpy_indexed as npi
 
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 semantic_step_global = 4
-unsupervised_cluster_num = 5
+unsupervised_cluster_num = 4
 latent_dim_global = 100
 
 class projection(keras.layers.Layer):
@@ -55,14 +56,14 @@ class protatype_ehr():
         self.lab_length = 19
         self.blood_length = 27
         self.epoch = 20
-        self.pre_train_epoch = 20
+        self.pre_train_epoch = 10
         self.latent_dim = latent_dim_global
         self.tau = 1
         self.time_sequence = self.read_d.time_sequence
         self.tcn_filter_size = 3
         self.semantic_time_step = semantic_step_global
         self.unsupervised_cluster_num = unsupervised_cluster_num
-        self.start_sampling_index = 4
+        self.start_sampling_index = 8
         self.sampling_interval = 4
         self.max_value_projection = np.zeros((self.batch_size,self.semantic_time_step))
         self.basis_input = np.ones((self.unsupervised_cluster_num,self.latent_dim))
@@ -96,7 +97,7 @@ class protatype_ehr():
         self.lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
             initial_learning_rate=0.0003,
             decay_steps=self.steps,
-            decay_rate=0.7)
+            decay_rate=0.5)
 
     def create_memory_bank(self):
         #self.train_data, self.train_logit,self.train_sofa,self.train_sofa_score = self.aquire_data(0, self.train_data, self.length_train)
@@ -210,7 +211,85 @@ class protatype_ehr():
 
         return loss
 
-    #def unsupervised_prototype_loss(self):
+    def compute_positive_pair_un(self, z, p):
+        z = tf.math.l2_normalize(z, axis=-1)
+        p = tf.math.l2_normalize(p, axis=-1)
+
+        positive_dot_prod = tf.multiply(z, p)
+        positive_dot_prod_sum = tf.math.exp(tf.reduce_sum(positive_dot_prod, -1) / self.tau)
+
+        return positive_dot_prod_sum
+
+    #def compute_negative_pair_un(self,extract_time, projection_basis):
+
+    def unsupervised_prototype_loss(self,extract_time, projection_basis,order_input):
+        extract_time = tf.math.l2_normalize(extract_time, axis=1)
+        #extract_time_order = tf.reshape(extract_time,
+                                        #[extract_time.shape[0]*extract_time.shape[1],extract_time.shape[2]])
+        projection_basis = tf.math.l2_normalize(projection_basis, axis=-1)
+        projection_basis_expand = tf.expand_dims(projection_basis, axis=1)
+        projection_basis_broad = tf.broadcast_to(projection_basis_expand,
+                                                 [projection_basis.shape[0],projection_basis.shape[1],
+                                                  projection_basis.shape[1],projection_basis.shape[2]])
+
+        extract_time_expand = tf.expand_dims(extract_time, axis=2)
+        extract_time_broad = tf.broadcast_to(extract_time_expand,[extract_time.shape[0],extract_time.shape[1],
+                                                                  extract_time.shape[1],extract_time.shape[2]])
+
+        denominator = tf.multiply(projection_basis_broad,extract_time_broad)
+
+        negative_dot_prod_sum = tf.reduce_sum(tf.math.exp(tf.reduce_sum(denominator, -1) / self.tau),2)
+
+        negative_dot_prod_sum = tf.reshape(negative_dot_prod_sum,
+                                           [negative_dot_prod_sum.shape[0]*negative_dot_prod_sum.shape[1]])
+
+        self.total_sementic_un = []
+        for i in range(self.semantic_time_step):
+            check = order_input == i
+            check = tf.cast(check, tf.float32)
+            check = tf.expand_dims(check, 2)
+            self.check_un = check
+            # projection_single = tf.broadcast_to(tf.expand_dims(projection_basis[0,i,:],0)
+            # ,projection_basis.shape)
+
+            projection_basis_single = tf.expand_dims(projection_basis[:, i, :], 1)
+            projection_single = tf.broadcast_to(projection_basis_single, shape=projection_basis.shape)
+
+            self.check_projection_single_un = projection_single
+            batch_semantic_embedding_single = tf.math.multiply(projection_single,
+                                                               check)
+            self.check_batch_semantic_embedding_single = batch_semantic_embedding_single
+            # batch_semantic_embedding_single = tf.reduce_sum(batch_semantic_embedding_single, axis=1)
+            # batch_semantic_embedding_single = tf.expand_dims(batch_semantic_embedding_single, axis=1)
+            self.total_sementic_un.append(batch_semantic_embedding_single)
+
+        batch_semantic_embedding_whole = tf.stack(self.total_sementic_un)
+        batch_semantic_embedding_whole = tf.reduce_sum(batch_semantic_embedding_whole, axis=0)
+
+        pos_prod_sum = self.compute_positive_pair_un(extract_time, batch_semantic_embedding_whole)
+
+        pos_prod_sum = tf.reshape(pos_prod_sum,[pos_prod_sum.shape[0]*pos_prod_sum.shape[1]])
+
+        nomalized_prob_log = tf.math.log(tf.math.divide(pos_prod_sum, negative_dot_prod_sum))
+
+        loss = tf.math.negative(tf.reduce_mean(nomalized_prob_log, 0))
+
+        return loss
+
+    def projection_regularize_loss(self,projection_basis):
+        projection_basis = projection_basis[0,:,:]
+
+        similarity_matrix = tf.matmul(projection_basis, tf.transpose(projection_basis))
+        mask = tf.linalg.diag(tf.zeros(projection_basis.shape[0]), padding_value=1)
+
+        negative_dot_prods = tf.math.abs(tf.multiply(similarity_matrix, mask))
+        projection_regular_loss = tf.reduce_mean(tf.reduce_sum(negative_dot_prods , 1))
+
+        return projection_regular_loss
+
+
+
+    #def protatype_nce_loss(self):
 
 
     def tcn_encoder_second_last_level(self):
@@ -335,7 +414,7 @@ class protatype_ehr():
 
         return tf.math.l2_normalize(pos_embedding)
 
-
+    """
     def E_step(self, batch_embedding,projection_basis):
         batch_embedding = tf.math.l2_normalize(batch_embedding, axis=1)
         basis = tf.math.l2_normalize(projection_basis, axis=1)
@@ -359,132 +438,78 @@ class protatype_ehr():
         self.check_max_value_projection = max_value_projection
 
         return max_value_projection
+    """
 
-    def extract_semantic(self):
-
-        order_input = layers.Input(self.semantic_time_step)
-        #order_input = tf.cast(order_input,tf.int32)
-        #order_input = layers.Input(self.latent_dim)
-        projection_basis = layers.Input((self.semantic_time_step,self.latent_dim))
-        #projection_basis = projection_basis[0,:,:]
-        #batch_semantic_embedding = tf.gather(projection_basis,
-                                             #order_input)
-
-        self.total_sementic = []
-        for i in range(self.semantic_time_step):
-            check = order_input == i
-            check = tf.cast(check,tf.float32)
-            check = tf.expand_dims(check,2)
-            batch_semantic_embedding_single = tf.math.multiply(projection_basis,
-                                                        check)
-            batch_semantic_embedding_single = tf.reduce_sum(batch_semantic_embedding_single,axis=1)
-            batch_semantic_embedding_single = tf.expand_dims(batch_semantic_embedding_single,axis=1)
-            self.total_sementic.append(batch_semantic_embedding_single)
-
-        batch_semantic_embedding = tf.concat(self.total_sementic,axis=1)
-        #batch_semantic_embedding = tf.reduce_sum(batch_semantic_embedding,axis=0)
-
-        self.check_batch_semantic_embedding = batch_semantic_embedding
-
-        batch_time_progression_semantic_embedding = batch_semantic_embedding + self.position_embedding
-
-        self.check_progression = batch_time_progression_semantic_embedding
-
-        batch_time_progression_semantic_embedding = tf.reduce_sum(batch_time_progression_semantic_embedding,
-                                                                  axis=1)
-
-        batch_time_progression_semantic_embedding = tf.math.l2_normalize(batch_time_progression_semantic_embedding,
-                                                                         axis=1)
-
-        self.check_projection_final = batch_time_progression_semantic_embedding
-
-        #return tf.keras.Model(projection_basis,batch_time_progression_semantic_embedding,name='semantic_extractor')
-
-        return tf.keras.Model([projection_basis,order_input],
-                              [batch_time_progression_semantic_embedding,projection_basis], name='semantic_extractor')
-
-    def train_semantic_time_progression(self):
-        """
-        define model
-        """
-        input = layers.Input((self.time_sequence,35))
-        self.tcn = self.tcn_encoder_second_last_level()
-        self.time_extractor = self.discrete_time_period_extract()
-        self.tcn_pull = self.tcn_pull()
+    def E_step(self,batch_embedding,projection_basis):
+        batch_embedding = tf.math.l2_normalize(batch_embedding, axis=1)
 
 
-        tcn = self.tcn(input)
-        time_extractor = self.time_extractor(tcn)
-        #global_pull = self.tcn_pull(tcn)
-        self.model_extractor = tf.keras.Model(input, time_extractor, name="time_extractor")
-        #self.model_pull = tf.keras.Model(input, global_pull, name="tcn_pull")
-        #for epoch in range(self.pre_train_epoch):
-            #print("\nStart of epoch %d" % (epoch,))
+        batch_embedding_whole = tf.reshape(batch_embedding,(batch_embedding.shape[0]*batch_embedding.shape[1],
+                                                            batch_embedding.shape[2]))
+        self.check_batch_embedding_whole = batch_embedding_whole
 
-        input_projection = layers.Input((self.semantic_time_step,self.latent_dim))
-        input_projection_order = layers.Input(self.semantic_time_step)
-        self.basis_model = self.projection_model()
-        #update_projection_basis, fake_input_order = self.basis_model([input_projection_batch, input_order])
-        self.semantic_model = self.extract_semantic()
+        batch_embedding = tf.expand_dims(batch_embedding, 2)
+        batch_embedding = tf.broadcast_to(batch_embedding, [batch_embedding.shape[0],
+                                                            self.semantic_time_step,
+                                                            self.semantic_time_step,
+                                                            self.latent_dim])
 
-        basis_model = self.basis_model([input_projection,input_projection_order])
-        semantic_model_output = self.semantic_model(basis_model)
+        self.check_batch_embedding_E = batch_embedding
 
-        self.semantic_model_extract = tf.keras.Model([input_projection,input_projection_order],semantic_model_output)
+        check_converge = 100 * np.ones((self.batch_embedding.shape[0] * self.batch_embedding.shape[1]))
 
-        index = 1
-        bce = tf.keras.losses.BinaryCrossentropy(from_logits=True)
-        for step, (x_batch_train, y_batch_train) in enumerate(self.train_dataset):
+        self.check_check_converge = check_converge
 
-            input_projection_batch = np.ones((self.batch_size,self.semantic_time_step,self.latent_dim))
-            input_order = np.ones((self.batch_size, self.semantic_time_step))
+        check_converge_num = 1000
+        self.check_converge_num = check_converge_num
 
+        max_value_projection = 0
 
-            self.check_batch = x_batch_train
-            extract_time,global_pull = self.model_extractor(x_batch_train)
+        while(check_converge_num > self.converge_threshold_E):
+            basis = tf.math.l2_normalize(projection_basis, axis=1)
 
-            fake_semantic_embedding,projection_basis = self.semantic_model_extract([input_projection_batch,input_order])
-            #self.check_global = extract_global
-            #semantic_embedding, update_projection_basis = self.semantic_model_extract()
-            self.check_extract_time = extract_time
-            self.check_fake_embedding = fake_semantic_embedding
-            projection = self.E_step(extract_time,projection_basis)
-            self.check_projection = projection
+            basis = tf.expand_dims(basis, 1)
+            basis = tf.broadcast_to(basis, [projection_basis.shape[0], self.semantic_time_step, self.semantic_time_step,
+                                            self.latent_dim])
+            self.check_basis_E = basis
 
+            projection = tf.multiply(batch_embedding, basis)
+            projection = tf.reduce_sum(projection, 3)
 
-            #if index == 1:
-                #break
+            self.check_projection_E = projection
+            max_value_projection = np.argmax(projection, axis=2)
+            self.check_max_value_projection = max_value_projection
 
+            projection_basis_whole = tf.reshape(max_value_projection,
+                                                (max_value_projection.shape[0]*max_value_projection.shape[1]))
 
-            with tf.GradientTape() as tape:
-                # z1, z2 = self.att_lstm_model(data_aug1)[1], self.att_lstm_model(data_aug2)[0]
-                extract_time, global_pull = self.model_extractor(x_batch_train)
-                semantic_embedding, projection_basis = self.semantic_model_extract([input_projection_batch, projection])
-                self.check_projection_basis = projection_basis
+            self.projection_basis_whole = projection_basis_whole
 
-                loss, loss_prob = self.info_nce_loss(semantic_embedding, global_pull)
-                #mse = tf.keras.losses.MeanSquaredError()
-                #loss = mse(global_pull1,global_pull2)
+            semantic_cluster = []
 
-            trainable_variables = self.model_extractor.trainable_variables+self.semantic_model_extract.trainable_variables
-            gradients = \
-                tape.gradient(loss, trainable_variables)
-            optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+            for i in range(self.unsupervised_cluster_num):
+                semantic_index = np.where(self.projection_basis_whole == i)[0]
+                semantic = tf.gather(batch_embedding_whole, semantic_index)
+                semantic = tf.reduce_mean(semantic, 0)
+                semantic_cluster.append(semantic)
 
-            optimizer.apply_gradients(zip(gradients, trainable_variables))
-            self.check_loss = loss
-            self.check_loss_prob = loss_prob
-        
+            semantic_cluster = tf.stack(semantic_cluster, 0)
 
-            if step % 20 == 0:
-                print("Training loss(for one batch) at step %d: %.4f"
-                      % (step, float(loss)))
-                print("seen so far: %s samples" % ((step + 1) * self.batch_size))
+            self.check_semantic_cluster = semantic_cluster
 
-                #self.loss_track.append(loss)
-                #self.loss_prob_track.append(loss_prob)
+            projection_basis = semantic_cluster
 
-    def pre_train_infomax(self):
+            max_value_projection_reshape = tf.reshape(max_value_projection,
+                                                      (max_value_projection.shape[0]*max_value_projection.shape[1]))
+            cluster_diff = max_value_projection_reshape - check_converge
+
+            self.check_cluster_diff = cluster_diff
+
+            check_converge_num = len(np.where(cluster_diff !=0)[0])
+
+        return max_value_projection, projection_basis
+
+    def train_semantic_time_pregression(self):
         #self.lstm = self.lstm_encoder()
         #self.lstm = self.tcn_encoder_second_last_level()
         self.auc_all = []
@@ -556,8 +581,12 @@ class protatype_ehr():
                         check = tf.cast(check, tf.float32)
                         check = tf.expand_dims(check, 2)
                         self.check_check = check
-                        projection_single = tf.broadcast_to(tf.expand_dims(projection_basis[0,i,:],0)
-                                                            ,projection_basis.shape)
+                        #projection_single = tf.broadcast_to(tf.expand_dims(projection_basis[0,i,:],0)
+                                                            #,projection_basis.shape)
+
+                        projection_basis_single = tf.expand_dims(projection_basis[:, i, :], 1)
+                        projection_single = tf.broadcast_to(projection_basis_single, shape=projection_basis.shape)
+
                         self.check_projection_single = projection_single
                         batch_semantic_embedding_single = tf.math.multiply(projection_single,
                                                                            check)
@@ -579,9 +608,18 @@ class protatype_ehr():
                     semantic_time_progression_loss = self.info_nce_loss(batch_semantic_embedding_whole,global_pull,
                                                                         global_pull_cohort,global_pull_control,
                                                                         y_batch_train)
+
+                    #semantic_time_progression_loss = self.info_nce_loss(batch_semantic_embedding_whole, global_pull)
+
+                    unsupervised_loss = self.unsupervised_prototype_loss(extract_time, projection_basis, order_input)
                     bceloss = tf.keras.losses.BinaryCrossentropy()(y_batch_train,prediction)
 
-                    loss = semantic_time_progression_loss + bceloss
+
+                    projection_regular_loss = self.projection_regularize_loss(projection_basis)
+
+                    loss = 0.6*semantic_time_progression_loss + bceloss + 0.1*unsupervised_loss \
+                           + 0.2*projection_regular_loss
+
 
                     #loss = bceloss
 
@@ -648,6 +686,53 @@ class protatype_ehr():
             self.semantic2[i] = np.median(k[np.nonzero(k)])
             k = np.array(self.semantic_real_basis3)[:, i]
             self.semantic3[i] = np.median(k[np.nonzero(k)])
+
+        sepsis_label = np.where(self.train_logit==1)[0]
+        non_sepsis_label = np.where(self.train_logit==0)[0]
+
+        self.sepsis_order = order_input[sepsis_label,:]
+        self.non_sepsis_order = order_input[non_sepsis_label,:]
+
+        self.row_sepsis = npi.mode(self.sepsis_order)
+        self.row_non_sepsis = npi.mode(self.non_sepsis_order)
+
+        self.remove_sepsis_order = []
+        self.remove_non_sepsis_order = []
+
+        for i in range(self.sepsis_order.shape[0]):
+            l = self.sepsis_order[i,:] == self.row_sepsis
+            if False in l:
+                self.remove_sepsis_order.append(self.sepsis_order[i,:])
+
+        for i in range(self.non_sepsis_order.shape[0]):
+            l = self.non_sepsis_order[i,:] == self.row_non_sepsis
+            if False in l:
+                self.remove_non_sepsis_order.append(self.non_sepsis_order[i,:])
+
+        self.remove_sepsis_order = np.stack(self.remove_sepsis_order,0)
+        self.remove_non_sepsis_order = np.stack(self.remove_non_sepsis_order,0)
+
+        self.row_sepsis_remove = npi.mode(self.remove_sepsis_order)
+        self.row_non_sepsis_remove = npi.mode(self.remove_non_sepsis_order)
+
+        self.remove_sepsis_order_sec = []
+        self.remove_non_sepsis_order_sec = []
+
+        for i in range(self.remove_sepsis_order.shape[0]):
+            l = self.remove_sepsis_order[i, :] == self.row_sepsis_remove
+            if False in l:
+                self.remove_sepsis_order_sec.append(self.remove_sepsis_order[i, :])
+
+        for i in range(self.remove_non_sepsis_order.shape[0]):
+            l = self.remove_non_sepsis_order[i, :] == self.row_non_sepsis_remove
+            if False in l:
+                self.remove_non_sepsis_order_sec.append(self.remove_non_sepsis_order[i, :])
+
+
+
+
+
+
 
 
 
