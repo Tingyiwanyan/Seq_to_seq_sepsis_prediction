@@ -7,13 +7,14 @@ from tensorflow import keras
 from scipy.stats import ortho_group
 from sklearn.metrics import roc_auc_score
 import numpy_indexed as npi
+from numpy import savetxt
 
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 semantic_step_global = 4
-unsupervised_cluster_num = 4
+unsupervised_cluster_num = 5
 latent_dim_global = 100
 
 class projection(keras.layers.Layer):
@@ -65,6 +66,7 @@ class protatype_ehr():
         self.unsupervised_cluster_num = unsupervised_cluster_num
         self.start_sampling_index = 8
         self.sampling_interval = 4
+        self.converge_threshold_E = 10
         self.max_value_projection = np.zeros((self.batch_size,self.semantic_time_step))
         self.basis_input = np.ones((self.unsupervised_cluster_num,self.latent_dim))
 
@@ -72,8 +74,8 @@ class protatype_ehr():
         initialize orthogonal projection basis
         """
         self.initializer_basis = tf.keras.initializers.Orthogonal()
-        self.projection_basis = tf.Variable(
-                self.initializer_basis(shape=(self.semantic_time_step, self.latent_dim)))
+        self.init_projection_basis = tf.Variable(
+                self.initializer_basis(shape=(self.unsupervised_cluster_num, self.latent_dim)))
 
 
         self.steps = self.length_train // self.batch_size
@@ -244,7 +246,7 @@ class protatype_ehr():
                                            [negative_dot_prod_sum.shape[0]*negative_dot_prod_sum.shape[1]])
 
         self.total_sementic_un = []
-        for i in range(self.semantic_time_step):
+        for i in range(self.unsupervised_cluster_num):
             check = order_input == i
             check = tf.cast(check, tf.float32)
             check = tf.expand_dims(check, 2)
@@ -290,6 +292,17 @@ class protatype_ehr():
 
 
     #def protatype_nce_loss(self):
+
+
+    def first_lvl_resolution_deconv(self):
+        inputs = layers.Input((1,self.latent_dim))
+
+        tcn_deconv1 = tf.keras.layers.Conv1DTranspose(35, self.tcn_filter_size)
+
+        output = tcn_deconv1(inputs)
+
+        return tf.keras.Model(inputs, output, name='tcn_deconv1')
+
 
 
     def tcn_encoder_second_last_level(self):
@@ -361,7 +374,7 @@ class protatype_ehr():
         #self.outputs4 = layernorm4(self.outputs4)
 
         return tf.keras.Model(inputs,
-                              [self.outputs4, self.outputs3, self.outputs2,self.outputs1], name='tcn_encoder')
+                              [inputs, self.outputs4, self.outputs3, self.outputs2,self.outputs1], name='tcn_encoder')
 
     def lstm_split_multi(self):
         inputs = layers.Input((self.time_sequence,self.latent_dim))
@@ -392,7 +405,25 @@ class protatype_ehr():
         return tf.keras.Model([inputs, inputs2, inputs3, inputs4],
                               output1, name='tcn_pull')
 
+    def position_project_layer(self):
+        model = tf.keras.Sequential(
+            [
+                # Note the AutoEncoder-like structure.
+                layers.Input((self.latent_dim)),
+                #layers.Input((50)),
+                layers.Dense(
+                    self.latent_dim,
+                    #use_bias=False,
+                    kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+                    activation='relu'
+                )
+            ],
+            name="position_projection",
+        )
+        return model
+
     def discrete_time_period_extract(self):
+        original_inputs = layers.Input((self.time_sequence,35))
         inputs = layers.Input((self.time_sequence, self.latent_dim))
         inputs2 = layers.Input((self.time_sequence, self.latent_dim))
         inputs3 = layers.Input((self.time_sequence, self.latent_dim))
@@ -401,8 +432,26 @@ class protatype_ehr():
         sample_sequence = sample_sequence[:,:self.semantic_time_step,:]
         sample_global = inputs[:,-1,:]
 
-        return tf.keras.Model([inputs,inputs2,inputs3,inputs4],
-                              [sample_sequence,sample_global],name='discrete_time_period_extractor')
+
+        sample_original_time_list = []
+        #group_index = np.zeros((self.semantic_time_step,self.tcn_filter_size))
+        time_seq_range = np.array(range(self.time_sequence))
+        time_index = time_seq_range[self.start_sampling_index:self.time_sequence:self.sampling_interval]
+        time_index = time_index[:self.semantic_time_step]
+        for i in range(self.semantic_time_step):
+            group_index = time_seq_range[(time_index[i]-self.tcn_filter_size+1):time_index[i]+1]
+            original_inputs_trans = tf.transpose(original_inputs,[1,0,2])
+            sample_sequence_single = tf.gather(original_inputs_trans,group_index)
+            sample_sequence_single = tf.transpose(sample_sequence_single,[1,0,2])
+            sample_original_time_list.append(sample_sequence_single)
+
+        self.check_sample_original_time_list = sample_original_time_list
+        sample_original_time_sequence = tf.stack(sample_original_time_list,0)
+        sample_original_time_sequence = tf.transpose(sample_original_time_sequence,[1,0,2,3])
+
+
+        return tf.keras.Model([original_inputs,inputs,inputs2,inputs3,inputs4],
+                              [sample_sequence,sample_global,sample_original_time_sequence],name='discrete_time_period_extractor')
 
     def position_encoding(self,pos):
         pos_embedding = np.zeros(self.latent_dim)
@@ -443,6 +492,14 @@ class protatype_ehr():
     def E_step(self,batch_embedding,projection_basis):
         batch_embedding = tf.math.l2_normalize(batch_embedding, axis=1)
 
+        projection_basis = projection_basis[0]
+        projection_basis = tf.expand_dims(projection_basis, 0)
+        projection_basis = tf.broadcast_to(projection_basis,
+                                           shape=(batch_embedding.shape[0],
+                                                  projection_basis.shape[1], projection_basis.shape[2]))
+
+        self.first_check_projection = projection_basis
+
 
         batch_embedding_whole = tf.reshape(batch_embedding,(batch_embedding.shape[0]*batch_embedding.shape[1],
                                                             batch_embedding.shape[2]))
@@ -451,12 +508,12 @@ class protatype_ehr():
         batch_embedding = tf.expand_dims(batch_embedding, 2)
         batch_embedding = tf.broadcast_to(batch_embedding, [batch_embedding.shape[0],
                                                             self.semantic_time_step,
-                                                            self.semantic_time_step,
+                                                            self.unsupervised_cluster_num,
                                                             self.latent_dim])
 
         self.check_batch_embedding_E = batch_embedding
 
-        check_converge = 100 * np.ones((self.batch_embedding.shape[0] * self.batch_embedding.shape[1]))
+        check_converge = 100 * np.ones((batch_embedding.shape[0] * batch_embedding.shape[1]))
 
         self.check_check_converge = check_converge
 
@@ -466,10 +523,13 @@ class protatype_ehr():
         max_value_projection = 0
 
         while(check_converge_num > self.converge_threshold_E):
-            basis = tf.math.l2_normalize(projection_basis, axis=1)
+            #print(check_converge_num)
+            basis = tf.math.l2_normalize(projection_basis, axis=-1)
+            self.check_basis = basis
 
             basis = tf.expand_dims(basis, 1)
-            basis = tf.broadcast_to(basis, [projection_basis.shape[0], self.semantic_time_step, self.semantic_time_step,
+            basis = tf.broadcast_to(basis, [projection_basis.shape[0], self.semantic_time_step,
+                                            self.unsupervised_cluster_num,
                                             self.latent_dim])
             self.check_basis_E = basis
 
@@ -499,39 +559,56 @@ class protatype_ehr():
 
             projection_basis = semantic_cluster
 
-            max_value_projection_reshape = tf.reshape(max_value_projection,
-                                                      (max_value_projection.shape[0]*max_value_projection.shape[1]))
-            cluster_diff = max_value_projection_reshape - check_converge
+            projection_basis = tf.expand_dims(projection_basis, 0)
+            projection_basis = tf.broadcast_to(projection_basis,
+                                               shape=(batch_embedding.shape[0],
+                                                      projection_basis.shape[1], projection_basis.shape[2]))
+
+
+
+            #max_value_projection_reshape = tf.reshape(max_value_projection,
+                                                     # (max_value_projection.shape[0]*max_value_projection.shape[1]))
+            cluster_diff = projection_basis_whole - check_converge
+            check_converge = projection_basis_whole
 
             self.check_cluster_diff = cluster_diff
 
             check_converge_num = len(np.where(cluster_diff !=0)[0])
 
-        return max_value_projection, projection_basis
 
+
+
+        #print("converged")
+
+        return max_value_projection, projection_basis
+    
+    
     def train_semantic_time_pregression(self):
         #self.lstm = self.lstm_encoder()
         #self.lstm = self.tcn_encoder_second_last_level()
         self.auc_all = []
         input = layers.Input((self.time_sequence, 35))
         self.tcn = self.tcn_encoder_second_last_level()
+        self.tcn_1_lvl = self.first_lvl_resolution_deconv()
         self.time_extractor = self.discrete_time_period_extract()
+        self.position_project = self.position_project_layer()
         tcn_pull = self.tcn_pull()
 
         tcn = self.tcn(input)
         time_extractor = self.time_extractor(tcn)
-        global_pull = tcn_pull(tcn)
+        #global_pull = tcn_pull(tcn)
         self.model_extractor = tf.keras.Model(input, time_extractor, name="time_extractor")
 
         self.basis_model = self.projection_model()
         self.projection_layer = self.project_logit()
 
         self.loss_track = []
-        self.loss_prob_track = []
+        self.loss_track_mse = []
+
 
         for epoch in range(self.pre_train_epoch):
             print("\nStart of epoch %d" % (epoch,))
-            extract_val, global_val = self.model_extractor(self.val_data)
+            extract_val, global_val, sample_sequence_val = self.model_extractor(self.val_data)
             prediction_val = self.projection_layer(global_val)
             self.check_prediction_val = prediction_val
             val_acc = roc_auc_score(self.val_logit,prediction_val)
@@ -539,44 +616,82 @@ class protatype_ehr():
             print("auc")
             print(val_acc)
 
-            for step, (x_batch_train, y_batch_train) in enumerate(self.train_dataset):
+            extract_time_total, global_pull_total, sample_sequence_train_total = self.model_extractor(self.train_data)
+            projection_basis = self.init_projection_basis
+            projection_basis = tf.expand_dims(projection_basis, 0)
+
+            order_input_total, projection_basis_total = self.E_step(extract_time_total, projection_basis)
+
+            #projection_basis = projection_basis[0]
+            #projection_basis = tf.expand_dims(projection_basis,0)
+
+            self.check_order_input_total = order_input_total
+            self.check_projection_basis_total = projection_basis_total
+
+            self.converge_projection_basis = projection_basis_total[0]
+
+            self.train_dataset = tf.data.Dataset.from_tensor_slices(
+                (self.train_data, self.train_logit,
+                 order_input_total,projection_basis_total, sample_sequence_train_total))
+            self.train_dataset = self.train_dataset.shuffle(buffer_size=1024).batch(self.batch_size)
+
+            for step, (x_batch_train, y_batch_train,order_input,
+                       projection_basis, sample_sequence_train) in enumerate(self.train_dataset):
 
                 random_indices_cohort = np.random.choice(self.num_cohort,size=self.neg_size,replace=False)
                 random_indices_control = np.random.choice(self.num_control,size=self.neg_size,replace=False)
 
                 x_batch_train_cohort = self.memory_bank_cohort[random_indices_cohort,:,:]
                 x_batch_train_control = self.memory_bank_control[random_indices_control,:,:]
-                input_projection_batch = np.ones((x_batch_train.shape[0], self.semantic_time_step, self.latent_dim))
-                input_order = np.ones((x_batch_train.shape[0], self.semantic_time_step))
+                #input_projection_batch = np.ones((x_batch_train.shape[0], self.semantic_time_step, self.latent_dim))
+                #input_order = np.ones((x_batch_train.shape[0], self.semantic_time_step))
+
+                #if len(projection_basis.shape) !=3:
+                    #projection_basis = tf.expand_dims(projection_basis,0)
+                    #projection_basis = tf.broadcast_to(projection_basis,
+                                                        #shape=(x_batch_train.shape[0],
+                                                        #projection_basis.shape[1],projection_basis.shape[2]))
+                sample_sequence_train = tf.reshape(sample_sequence_train,
+                                                   [sample_sequence_train.shape[0] * sample_sequence_train.shape[1],
+                                                    sample_sequence_train.shape[2],
+                                                    sample_sequence_train.shape[3]])
+
+                #sample_sequence_train = tf.transpose(sample_sequence_train,[1,0,2,3])
+
+                self.check_sample_sequence_train = sample_sequence_train
+
+                self.check_projection_basis = projection_basis
 
                 self.check_batch = x_batch_train
-                extract_time, global_pull = self.model_extractor(x_batch_train)
+                #extract_time, global_pull, sample_sequence = self.model_extractor(x_batch_train)
 
-                projection_basis, projection_order = self.basis_model(
-                    [input_projection_batch, input_order])
+                #projection_basis, projection_order = self.basis_model(
+                    #[input_projection_batch, input_order])
                 # self.check_global = extract_global
                 # semantic_embedding, update_projection_basis = self.semantic_model_extract()
-                self.check_projection_basis = projection_basis
-                self.check_extract_time = extract_time
-                order_input = self.E_step(extract_time, projection_basis)
-                self.check_projection = order_input
 
-                #if index == 1:
-                    #break
+                #self.check_extract_time = extract_time
+                #order_input, projection_basis = self.E_step(extract_time, projection_basis)
+                self.check_projection = order_input
 
 
                 with tf.GradientTape() as tape:
 
-                    extract_time, global_pull = self.model_extractor(x_batch_train)
-                    extract_time_cohort, global_pull_cohort = self.model_extractor(x_batch_train_cohort)
-                    extract_time_control, global_pull_control = self.model_extractor(x_batch_train_control)
+                    extract_time, global_pull, sample_sequence = self.model_extractor(x_batch_train)
+                    extract_time_cohort, global_pull_cohort, sample_sequence_cohort = \
+                        self.model_extractor(x_batch_train_cohort)
+                    extract_time_control, global_pull_control, sample_sequence_control = \
+                        self.model_extractor(x_batch_train_control)
+
+
 
                     prediction = self.projection_layer(global_pull)
+                    self.check_extract_time = extract_time
                     self.check_global_pull = global_pull
-                    projection_basis, projection_order = self.basis_model(
-                        [input_projection_batch, order_input])
+                    #projection_basis, projection_order = self.basis_model(
+                        #[input_projection_batch, order_input])
                     self.total_sementic = []
-                    for i in range(self.semantic_time_step):
+                    for i in range(self.unsupervised_cluster_num):
                         check = order_input == i
                         check = tf.cast(check, tf.float32)
                         check = tf.expand_dims(check, 2)
@@ -595,13 +710,17 @@ class protatype_ehr():
                         batch_semantic_embedding_single_position = tf.math.multiply(position_embedding,check)
                         self.check_batch_semantic_embedding_single_position = batch_semantic_embedding_single_position
                         batch_semantic_embedding_single_final = \
-                            batch_semantic_embedding_single+batch_semantic_embedding_single_position
+                            batch_semantic_embedding_single*batch_semantic_embedding_single_position
                         self.check_batch_semantic_embedding_single_final = batch_semantic_embedding_single_final
                         #batch_semantic_embedding_single = tf.reduce_sum(batch_semantic_embedding_single, axis=1)
                         #batch_semantic_embedding_single = tf.expand_dims(batch_semantic_embedding_single, axis=1)
                         self.total_sementic.append(batch_semantic_embedding_single_final)
 
-                    batch_semantic_embedding_whole = tf.stack(self.total_sementic)
+                    batch_semantic_embedding_whole_ = tf.stack(self.total_sementic)
+                    self.check_batch_semantic_embedding_whole_ = batch_semantic_embedding_whole_
+
+                    batch_semantic_embedding_whole = self.position_project(batch_semantic_embedding_whole_)
+                    #batch_semantic_embedding_whole = tf.math.sigmoid(batch_semantic_embedding_whole_)
                     batch_semantic_embedding_whole = tf.reduce_sum(batch_semantic_embedding_whole,axis=0)
                     batch_semantic_embedding_whole = tf.reduce_sum(batch_semantic_embedding_whole,axis=1)
                     self.check_batch_semantic_embedding_whole = batch_semantic_embedding_whole
@@ -615,10 +734,11 @@ class protatype_ehr():
                     bceloss = tf.keras.losses.BinaryCrossentropy()(y_batch_train,prediction)
 
 
-                    projection_regular_loss = self.projection_regularize_loss(projection_basis)
 
-                    loss = 0.6*semantic_time_progression_loss + bceloss + 0.1*unsupervised_loss \
-                           + 0.2*projection_regular_loss
+                    #projection_regular_loss = self.projection_regularize_loss(projection_basis)
+
+                    loss = 0.6*semantic_time_progression_loss + bceloss + 0.4*unsupervised_loss
+                           #+ 0.2*projection_regular_loss
 
 
                     #loss = bceloss
@@ -626,8 +746,10 @@ class protatype_ehr():
                 self.check_loss = loss
                 #z1, z2 = self.att_lstm_model(data_aug1)[1], self.att_lstm_model(data_aug2)[0]
 
-                trainable_weights = self.model_extractor.trainable_weights+\
-                                    self.basis_model.trainable_weights+self.projection_layer.trainable_weights
+                trainable_weights = self.model_extractor.trainable_weights+self.projection_layer.trainable_weights# + \
+                                    #self.position_project.trainable_weights
+                                    #+self.tcn_1_lvl.trainable_weights
+                                    #self.basis_model.trainable_weights
                 gradients = tape.gradient(loss, trainable_weights)
                 optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
@@ -636,11 +758,54 @@ class protatype_ehr():
                 #self.check_loss_prob = loss_prob
 
                 if step % 20 == 0:
-                    print("Training loss(for one batch) at step %d: %.4f"
+                    print("Training loss(for one batch, semantic_progress+bce) at step %d: %.4f"
                           % (step, float(loss)))
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
 
                     self.loss_track.append(loss)
+
+                with tf.GradientTape() as tape:
+                    extract_time_reshape = tf.reshape(extract_time, [extract_time.shape[0] * extract_time.shape[1],
+                                                                     extract_time.shape[2]])
+
+                    extract_time_reshape = tf.expand_dims(extract_time_reshape, 1)
+
+                    reconstruct_1_lvl = self.tcn_1_lvl(extract_time_reshape)
+
+                    self.check_extract_time_reshape = extract_time_reshape
+                    self.check_reconstruct_1_lvl = reconstruct_1_lvl
+
+                    mseloss = tf.keras.losses.MeanSquaredError()(sample_sequence_train, reconstruct_1_lvl)
+
+                trainable_weights = self.tcn_1_lvl.trainable_weights
+
+                gradients = tape.gradient(mseloss, trainable_weights)
+                optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
+
+                optimizer.apply_gradients(zip(gradients, trainable_weights))
+                #self.check_loss = loss
+
+                if step % 20 == 0:
+                    print("Training loss(for one batch, mse) at step %d: %.4f"
+                          % (step, float(mseloss)))
+                    print("seen so far: %s samples" % ((step + 1) * self.batch_size))
+
+                    self.loss_track_mse.append(mseloss)
+
+
+    def reconstruct_semantic_1_lvl(self):
+        self.reconstruct_semantic_origin = np.zeros((self.unsupervised_cluster_num, self.tcn_filter_size, 35))
+        projection_basis = tf.expand_dims(self.check_projection_basis[0],1)
+        self.reconstruct_semantic_norm = self.tcn_1_lvl(projection_basis)
+
+        for k in range(self.unsupervised_cluster_num):
+            for i in range(35):
+                if self.read_d.std_all[i] == 0:
+                    self.reconstruct_semantic_origin[:,:,i] = self.read_d.ave_all[i]
+                else:
+                    for j in range(self.tcn_filter_size):
+                        self.reconstruct_semantic_origin[k, j, i] = \
+                            (self.reconstruct_semantic_norm[k, j, i] * self.read_d.std_all[i]) + self.read_d.ave_all[i]
 
     def semantic_extraction(self):
         real_sequence = self.train_data_origin[:, self.start_sampling_index:self.time_sequence:self.sampling_interval, :]
@@ -648,14 +813,16 @@ class protatype_ehr():
         input_projection_batch = np.ones((self.train_data.shape[0], self.semantic_time_step, self.latent_dim))
         input_order = np.ones((self.train_data.shape[0], self.semantic_time_step))
 
-        extract_time, global_pull = self.model_extractor(self.train_data)
-        projection_basis, projection_order = self.basis_model(
-            [input_projection_batch, input_order])
+        extract_time, global_pull,sample_sequence = self.model_extractor(self.train_data)
+        #projection_basis, projection_order = self.basis_model(
+            #[input_projection_batch, input_order])
+
+        projection_basis = self.check_projection_basis_total
         self.check_projection_basis = projection_basis
         self.check_extract_time = extract_time
-        order_input = self.E_step(extract_time, projection_basis)
+        order_input,projection_basis_ = self.E_step(extract_time, projection_basis)
         self.check_order_input = order_input
-
+        """
         self.semantic_real_basis0 = []
         self.semantic_real_basis1 = []
         self.semantic_real_basis2 = []
@@ -686,7 +853,7 @@ class protatype_ehr():
             self.semantic2[i] = np.median(k[np.nonzero(k)])
             k = np.array(self.semantic_real_basis3)[:, i]
             self.semantic3[i] = np.median(k[np.nonzero(k)])
-
+        """
         sepsis_label = np.where(self.train_logit==1)[0]
         non_sepsis_label = np.where(self.train_logit==0)[0]
 
@@ -796,14 +963,12 @@ class protatype_ehr():
 
 
 
-
-
     def project_logit(self):
         model = tf.keras.Sequential(
             [
                 # Note the AutoEncoder-like structure.
                 layers.Input((self.latent_dim)),
-                layers.Input((50)),
+                #layers.Input((50)),
                 layers.Dense(
                     1,
                     #use_bias=False,
