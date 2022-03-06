@@ -13,9 +13,10 @@ from numpy import savetxt
 import matplotlib.pyplot as plt
 import numpy as np
 
-semantic_step_global = 4
-unsupervised_cluster_num = 5
+semantic_step_global = 6
+unsupervised_cluster_num = 30
 latent_dim_global = 100
+positive_sample_size = 5
 
 class projection(keras.layers.Layer):
     def __init__(self, units=semantic_step_global, input_dim=latent_dim_global):
@@ -53,19 +54,21 @@ class protatype_ehr():
         self.gaussian_sigma = 0.0001
         self.batch_size = 128
         self.neg_size = self.batch_size
+        self.pos_size = positive_sample_size
         self.vital_length = 8
         self.lab_length = 19
         self.blood_length = 27
         self.epoch = 20
-        self.pre_train_epoch = 10
+        self.feature_num = 34
+        self.pre_train_epoch = 40
         self.latent_dim = latent_dim_global
         self.tau = 1
         self.time_sequence = self.read_d.time_sequence
-        self.tcn_filter_size = 3
+        self.tcn_filter_size = 5
         self.semantic_time_step = semantic_step_global
         self.unsupervised_cluster_num = unsupervised_cluster_num
-        self.start_sampling_index = 8
-        self.sampling_interval = 4
+        self.start_sampling_index = 5
+        self.sampling_interval = 5
         self.converge_threshold_E = 10
         self.max_value_projection = np.zeros((self.batch_size,self.semantic_time_step))
         self.basis_input = np.ones((self.unsupervised_cluster_num,self.latent_dim))
@@ -80,7 +83,7 @@ class protatype_ehr():
 
         self.steps = self.length_train // self.batch_size
         self.lr_decayed_fn = tf.keras.optimizers.schedules.CosineDecay(
-        initial_learning_rate=0.001, decay_steps=self.steps)
+        initial_learning_rate=0.0003, decay_steps=self.steps)
 
         """
         initialize position encoding vectors
@@ -99,35 +102,42 @@ class protatype_ehr():
         self.lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
             initial_learning_rate=0.0003,
             decay_steps=self.steps,
-            decay_rate=0.5)
+            decay_rate=0.3)
 
     def create_memory_bank(self):
         #self.train_data, self.train_logit,self.train_sofa,self.train_sofa_score = self.aquire_data(0, self.train_data, self.length_train)
         #self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         #self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        file_path = '/home/tingyi/physionet_data/'
+        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
             self.train_logit = np.load(f)
-        with open(file_path + 'test.npy', 'rb') as f:
-            self.test_data = np.load(f)
-        with open(file_path + 'test_logit.npy', 'rb') as f:
-            self.test_logit = np.load(f)
+        with open(file_path + 'train_on_site_time.npy', 'rb') as f:
+            self.train_on_site_time = np.load(f)
+
+        #with open(file_path + 'test.npy', 'rb') as f:
+            #self.test_data = np.load(f)
+        #with open(file_path + 'test_logit.npy', 'rb') as f:
+            #self.test_logit = np.load(f)
         with open(file_path + 'val.npy', 'rb') as f:
             self.val_data = np.load(f)
         with open(file_path + 'val_logit.npy', 'rb') as f:
             self.val_logit = np.load(f)
-        with open(file_path + 'train_sofa_score.npy', 'rb') as f:
-            self.train_sofa_score = np.load(f)
-        with open(file_path + 'train_sofa.npy', 'rb') as f:
-            self.train_sofa = np.load(f)
+        with open(file_path + 'val_on_site_time.npy', 'rb') as f:
+            self.val_on_site_time = np.load(f)
+        #with open(file_path + 'train_sofa_score.npy', 'rb') as f:
+            #self.train_sofa_score = np.load(f)
+        #with open(file_path + 'train_sofa.npy', 'rb') as f:
+            #self.train_sofa = np.load(f)
 
-        with open(file_path + 'train_origin_35.npy', 'rb') as f:
+        with open(file_path + 'train_origin.npy', 'rb') as f:
             self.train_data_origin = np.load(f)
 
-        self.train_dataset = tf.data.Dataset.from_tensor_slices((self.train_data, self.train_logit))#,self.train_sofa_score))
+
+        self.train_dataset = tf.data.Dataset.from_tensor_slices((self.train_data, self.train_logit,
+                                                                 self.train_on_site_time))#,self.train_sofa_score))
         self.train_dataset = self.train_dataset.shuffle(buffer_size=1024).batch(self.batch_size)
         cohort_index = np.where(self.train_logit == 1)[0]
         control_index = np.where(self.train_logit == 0)[0]
@@ -213,6 +223,71 @@ class protatype_ehr():
 
         return loss
 
+    def compute_positive_pair_cl(self,z, global_pull_cohort, global_pull_control, label):
+        z = tf.math.l2_normalize(z, axis=1)
+
+        global_pull_cohort = tf.math.l2_normalize(global_pull_cohort, axis=1)
+        global_pull_control = tf.math.l2_normalize(global_pull_control, axis=1)
+
+        similarity_matrix_cohort = tf.matmul(z, tf.transpose(global_pull_cohort))
+        similarity_matrix_control = tf.matmul(z, tf.transpose(global_pull_control))
+
+        pos_cohort = tf.math.exp(similarity_matrix_cohort / self.tau)
+        self.pos_cohort = pos_cohort
+        pos_control = tf.math.exp(similarity_matrix_control / self.tau)
+        self.pos_control = pos_control
+        label = tf.cast(label, tf.int32)
+        self.check_label = label
+
+        pos_both = tf.stack((pos_control, pos_cohort), 2)
+        self.check_pos_both = pos_both
+        pos_dot_prods = [pos_both[i, :, label[i]] for i in range(z.shape[0])]
+        self.check_pos_dot_prods = tf.stack(pos_dot_prods)
+
+        return tf.stack(pos_dot_prods)
+
+    def compute_negative_pair_cl(self, z, global_pull_cohort, global_pull_control, label):
+        z = tf.math.l2_normalize(z, axis=1)
+
+        global_pull_cohort = tf.math.l2_normalize(global_pull_cohort, axis=1)
+        global_pull_control = tf.math.l2_normalize(global_pull_control, axis=1)
+
+        similarity_matrix_cohort = tf.matmul(z, tf.transpose(global_pull_cohort))
+        similarity_matrix_control = tf.matmul(z, tf.transpose(global_pull_control))
+
+        neg_cohort_sum = tf.reduce_sum(tf.math.exp(similarity_matrix_cohort / self.tau), 1)
+        #self.check_neg_cohort_sum = neg_cohort_sum
+        neg_control_sum = tf.reduce_sum(tf.math.exp(similarity_matrix_control / self.tau), 1)
+        #self.check_neg_control_sum = neg_control_sum
+        label = tf.cast(label, tf.int32)
+        #self.check_label = label
+
+        neg_sum_both = tf.stack((neg_cohort_sum, neg_control_sum), 1)
+        #self.check_neg_sum_both = neg_sum_both
+        negative_dot_prods_sum = [neg_sum_both[i, label[i]] for i in range(z.shape[0])]
+        #self.check_negative_dot_prods_sum = negative_dot_prods_sum
+
+        return negative_dot_prods_sum
+
+
+    def supervised_cl_loss(self, z, global_pull_cohort,global_pull_control,
+                           global_pull_cohort_pos,global_pull_control_pos,label):
+        positive_dot_prod = self.compute_positive_pair_cl(z, global_pull_cohort_pos, global_pull_control_pos, label)
+        negative_dot_prod_sum = self.compute_negative_pair_cl(z, global_pull_cohort, global_pull_control, label)
+
+        negative_dot_prod_sum = tf.expand_dims(negative_dot_prod_sum,1)
+        negative_dot_prod_sum = tf.broadcast_to(negative_dot_prod_sum,shape = positive_dot_prod.shape)
+
+        denominator = tf.math.add(positive_dot_prod, negative_dot_prod_sum)
+        nomalized_prob_log = tf.reduce_sum(tf.math.log(tf.math.divide(positive_dot_prod,denominator)),1)
+        self.check_divide = nomalized_prob_log
+        #nomalized_prob_log = tf.math.log(divide)
+        #loss_prob = tf.reduce_mean(tf.math.divide(positive_dot_prod_sum, denominator), 0)
+        loss = tf.math.negative(tf.reduce_mean(nomalized_prob_log, 0))
+
+        return loss
+
+
     def compute_positive_pair_un(self, z, p):
         z = tf.math.l2_normalize(z, axis=-1)
         p = tf.math.l2_normalize(p, axis=-1)
@@ -222,7 +297,6 @@ class protatype_ehr():
 
         return positive_dot_prod_sum
 
-    #def compute_negative_pair_un(self,extract_time, projection_basis):
 
     def unsupervised_prototype_loss(self,extract_time, projection_basis,order_input):
         extract_time = tf.math.l2_normalize(extract_time, axis=1)
@@ -231,12 +305,12 @@ class protatype_ehr():
         projection_basis = tf.math.l2_normalize(projection_basis, axis=-1)
         projection_basis_expand = tf.expand_dims(projection_basis, axis=1)
         projection_basis_broad = tf.broadcast_to(projection_basis_expand,
-                                                 [projection_basis.shape[0],projection_basis.shape[1],
+                                                 [projection_basis.shape[0],extract_time.shape[1],
                                                   projection_basis.shape[1],projection_basis.shape[2]])
 
         extract_time_expand = tf.expand_dims(extract_time, axis=2)
         extract_time_broad = tf.broadcast_to(extract_time_expand,[extract_time.shape[0],extract_time.shape[1],
-                                                                  extract_time.shape[1],extract_time.shape[2]])
+                                                                  projection_basis.shape[1],extract_time.shape[2]])
 
         denominator = tf.multiply(projection_basis_broad,extract_time_broad)
 
@@ -255,7 +329,9 @@ class protatype_ehr():
             # ,projection_basis.shape)
 
             projection_basis_single = tf.expand_dims(projection_basis[:, i, :], 1)
-            projection_single = tf.broadcast_to(projection_basis_single, shape=projection_basis.shape)
+            projection_single = tf.broadcast_to(projection_basis_single, shape=(projection_basis.shape[0],
+                                                                                check.shape[1],
+                                                                                projection_basis.shape[2]))
 
             self.check_projection_single_un = projection_single
             batch_semantic_embedding_single = tf.math.multiply(projection_single,
@@ -290,14 +366,19 @@ class protatype_ehr():
         return projection_regular_loss
 
 
-
-    #def protatype_nce_loss(self):
-
-
     def first_lvl_resolution_deconv(self):
         inputs = layers.Input((1,self.latent_dim))
 
-        tcn_deconv1 = tf.keras.layers.Conv1DTranspose(35, self.tcn_filter_size)
+        tcn_deconv1 = tf.keras.layers.Conv1DTranspose(self.feature_num, self.tcn_filter_size)
+
+        output = tcn_deconv1(inputs)
+
+        return tf.keras.Model(inputs, output, name='tcn_deconv1')
+
+    def one_h_resolution_deconv(self):
+        inputs = layers.Input((1,self.latent_dim))
+
+        tcn_deconv1 = tf.keras.layers.Conv1DTranspose(self.feature_num, 1)
 
         output = tcn_deconv1(inputs)
 
@@ -312,20 +393,36 @@ class protatype_ehr():
         """
         define dilation for each layer(24 hours)
         """
-        dilation1 = 1
-        dilation2 = 2
-        dilation3 = 4
+        dilation1 = 1 #3 hours
+        dilation2 = 2 #7hours
+        dilation3 = 4 #15hours
         dilation4 = 8 # with filter size 3, 8x3=24, already covers the whole time sequence
+        #dilation5 = 16
+
+        """
+        define the identical resolution
+        """
+        inputs = layers.Input((self.time_sequence, self.feature_num))
+        #tcn_conv0 = tf.keras.layers.Conv1D(self.latent_dim, self.tcn_filter_size, activation='relu',
+                                           #dilation_rate=dilation1, padding='valid')
+        tcn_conv0 = tf.keras.layers.Conv1D(self.latent_dim, 1, activation='relu', dilation_rate=1,padding='valid')
+        layernorm1 = tf.keras.layers.BatchNormalization()
+        #padding_1 = (self.tcn_filter_size - 1) * dilation1
+        #inputs1 = tf.pad(inputs, tf.constant([[0, 0], [1, 0], [0, 0]]) * padding_1)
+        self.outputs0 = tcn_conv0(inputs)
+        #self.outputs1 = conv1_identity(self.outputs1)
 
         """
         define the first tcn layer, dilation=1
         """
-        inputs = layers.Input((self.time_sequence,35))
+        #inputs = layers.Input((self.time_sequence,self.feature_num))
         tcn_conv1 = tf.keras.layers.Conv1D(self.latent_dim,self.tcn_filter_size,activation='relu',dilation_rate=dilation1,padding='valid')
         conv1_identity = tf.keras.layers.Conv1D(self.latent_dim,1,activation='relu',dilation_rate=1)
         layernorm1 = tf.keras.layers.BatchNormalization()
         padding_1 = (self.tcn_filter_size-1) * dilation1
-        inputs1 = tf.pad(inputs, tf.constant([[0,0],[1,0],[0,0]]) * padding_1)
+        #inputs1 = tf.pad(inputs, tf.constant([[0,0],[1,0],[0,0]]) * padding_1)
+
+        inputs1 = tf.pad(self.outputs0, tf.constant([[0, 0], [1, 0], [0, 0]]) * padding_1)
         self.outputs1 = tcn_conv1(inputs1)
         self.outputs1 = conv1_identity(self.outputs1)
         #self.outputs1 = layernorm1(self.outputs1)
@@ -374,7 +471,7 @@ class protatype_ehr():
         #self.outputs4 = layernorm4(self.outputs4)
 
         return tf.keras.Model(inputs,
-                              [inputs, self.outputs4, self.outputs3, self.outputs2,self.outputs1], name='tcn_encoder')
+                              [inputs, self.outputs4, self.outputs3, self.outputs2,self.outputs1,self.outputs0], name='tcn_encoder')
 
     def lstm_split_multi(self):
         inputs = layers.Input((self.time_sequence,self.latent_dim))
@@ -423,7 +520,7 @@ class protatype_ehr():
         return model
 
     def discrete_time_period_extract(self):
-        original_inputs = layers.Input((self.time_sequence,35))
+        original_inputs = layers.Input((self.time_sequence,self.feature_num))
         inputs = layers.Input((self.time_sequence, self.latent_dim))
         inputs2 = layers.Input((self.time_sequence, self.latent_dim))
         inputs3 = layers.Input((self.time_sequence, self.latent_dim))
@@ -453,13 +550,14 @@ class protatype_ehr():
         return tf.keras.Model([original_inputs,inputs,inputs2,inputs3,inputs4],
                               [sample_sequence,sample_global,sample_original_time_sequence],name='discrete_time_period_extractor')
 
+
     def position_encoding(self,pos):
         pos_embedding = np.zeros(self.latent_dim)
         for i in range(self.latent_dim):
             if i%2 == 0:
-                pos_embedding[i] = np.sin(pos/(np.power(10000,2*i/self.latent_dim)))
+                pos_embedding[i] = np.sin(pos/(np.power(2,2*i/self.latent_dim)))
             else:
-                pos_embedding[i] = np.cos(pos/(np.power(10000,2*i/self.latent_dim)))
+                pos_embedding[i] = np.cos(pos/(np.power(2,2*i/self.latent_dim)))
 
         return tf.math.l2_normalize(pos_embedding)
 
@@ -499,7 +597,6 @@ class protatype_ehr():
                                                   projection_basis.shape[1], projection_basis.shape[2]))
 
         self.first_check_projection = projection_basis
-
 
         batch_embedding_whole = tf.reshape(batch_embedding,(batch_embedding.shape[0]*batch_embedding.shape[1],
                                                             batch_embedding.shape[2]))
@@ -587,7 +684,8 @@ class protatype_ehr():
         #self.lstm = self.lstm_encoder()
         #self.lstm = self.tcn_encoder_second_last_level()
         self.auc_all = []
-        input = layers.Input((self.time_sequence, 35))
+        self.auc_iteration = []
+        input = layers.Input((self.time_sequence, self.feature_num))
         self.tcn = self.tcn_encoder_second_last_level()
         self.tcn_1_lvl = self.first_lvl_resolution_deconv()
         self.time_extractor = self.discrete_time_period_extract()
@@ -598,6 +696,8 @@ class protatype_ehr():
         time_extractor = self.time_extractor(tcn)
         #global_pull = tcn_pull(tcn)
         self.model_extractor = tf.keras.Model(input, time_extractor, name="time_extractor")
+
+        self.model_tcn = tf.keras.Model(input, tcn,name="tcn_model")
 
         self.basis_model = self.projection_model()
         self.projection_layer = self.project_logit()
@@ -643,6 +743,12 @@ class protatype_ehr():
 
                 x_batch_train_cohort = self.memory_bank_cohort[random_indices_cohort,:,:]
                 x_batch_train_control = self.memory_bank_control[random_indices_control,:,:]
+
+                random_indices_cohort_pos = np.random.choice(self.num_cohort, size=self.pos_size, replace=False)
+                random_indices_control_pos = np.random.choice(self.num_control, size=self.pos_size, replace=False)
+
+                x_batch_train_cohort_pos = self.memory_bank_cohort[random_indices_cohort_pos, :, :]
+                x_batch_train_control_pos = self.memory_bank_control[random_indices_control_pos, :, :]
                 #input_projection_batch = np.ones((x_batch_train.shape[0], self.semantic_time_step, self.latent_dim))
                 #input_order = np.ones((x_batch_train.shape[0], self.semantic_time_step))
 
@@ -683,6 +789,12 @@ class protatype_ehr():
                     extract_time_control, global_pull_control, sample_sequence_control = \
                         self.model_extractor(x_batch_train_control)
 
+                    """
+                    extract_time_cohort_pos, global_pull_cohort_pos, sample_sequence_cohort_pos = \
+                        self.model_extractor(x_batch_train_cohort_pos)
+                    extract_time_control_pos, global_pull_control_pos, sample_sequence_control_pos = \
+                        self.model_extractor(x_batch_train_control_pos)
+                    """
 
 
                     prediction = self.projection_layer(global_pull)
@@ -700,7 +812,9 @@ class protatype_ehr():
                                                             #,projection_basis.shape)
 
                         projection_basis_single = tf.expand_dims(projection_basis[:, i, :], 1)
-                        projection_single = tf.broadcast_to(projection_basis_single, shape=projection_basis.shape)
+                        projection_single = tf.broadcast_to(projection_basis_single, shape=(projection_basis.shape[0],
+                                                                                            check.shape[1],
+                                                                                            projection_basis.shape[2]))
 
                         self.check_projection_single = projection_single
                         batch_semantic_embedding_single = tf.math.multiply(projection_single,
@@ -731,13 +845,17 @@ class protatype_ehr():
                     #semantic_time_progression_loss = self.info_nce_loss(batch_semantic_embedding_whole, global_pull)
 
                     unsupervised_loss = self.unsupervised_prototype_loss(extract_time, projection_basis, order_input)
+                    #supervised_loss = self.supervised_cl_loss(global_pull,
+                                                              #global_pull_cohort,global_pull_control,
+                                                              #global_pull_cohort_pos,global_pull_control_pos,
+                                                              #y_batch_train)
                     bceloss = tf.keras.losses.BinaryCrossentropy()(y_batch_train,prediction)
 
 
 
                     #projection_regular_loss = self.projection_regularize_loss(projection_basis)
 
-                    loss = 0.6*semantic_time_progression_loss + bceloss + 0.4*unsupervised_loss
+                    loss = bceloss + 0.6*semantic_time_progression_loss + 0.2*unsupervised_loss#+0.4*supervised_loss
                            #+ 0.2*projection_regular_loss
 
 
@@ -757,12 +875,21 @@ class protatype_ehr():
                 self.check_loss = loss
                 #self.check_loss_prob = loss_prob
 
-                if step % 20 == 0:
+                if step % 10 == 0:
                     print("Training loss(for one batch, semantic_progress+bce) at step %d: %.4f"
                           % (step, float(loss)))
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
 
                     self.loss_track.append(loss)
+
+                    extract_val_iter, global_val_iter, sample_sequence_val_iter = self.model_extractor(self.val_data)
+                    prediction_val_iter = self.projection_layer(global_val_iter)
+                    self.check_prediction_val_iter = prediction_val_iter
+                    val_acc_iter = roc_auc_score(self.val_logit, prediction_val_iter)
+                    self.auc_iteration.append(val_acc_iter)
+                    print("auc")
+                    print(val_acc_iter)
+
 
                 with tf.GradientTape() as tape:
                     extract_time_reshape = tf.reshape(extract_time, [extract_time.shape[0] * extract_time.shape[1],
@@ -785,7 +912,7 @@ class protatype_ehr():
                 optimizer.apply_gradients(zip(gradients, trainable_weights))
                 #self.check_loss = loss
 
-                if step % 20 == 0:
+                if step % 10 == 0:
                     print("Training loss(for one batch, mse) at step %d: %.4f"
                           % (step, float(mseloss)))
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
@@ -794,12 +921,12 @@ class protatype_ehr():
 
 
     def reconstruct_semantic_1_lvl(self):
-        self.reconstruct_semantic_origin = np.zeros((self.unsupervised_cluster_num, self.tcn_filter_size, 35))
+        self.reconstruct_semantic_origin = np.zeros((self.unsupervised_cluster_num, self.tcn_filter_size, self.feature_num))
         projection_basis = tf.expand_dims(self.check_projection_basis[0],1)
         self.reconstruct_semantic_norm = self.tcn_1_lvl(projection_basis)
 
         for k in range(self.unsupervised_cluster_num):
-            for i in range(35):
+            for i in range(self.feature_num):
                 if self.read_d.std_all[i] == 0:
                     self.reconstruct_semantic_origin[:,:,i] = self.read_d.ave_all[i]
                 else:
@@ -897,18 +1024,11 @@ class protatype_ehr():
 
 
 
-
-
-
-
-
-
-
     def train_whole(self):
-        input = layers.Input((self.time_sequence, 35))
+        input = layers.Input((self.time_sequence, self.feature_num))
         self.tcn = self.tcn_encoder_second_last_level()
         self.time_extractor = self.discrete_time_period_extract()
-        self.tcn_pull = self.tcn_pull()
+        #self.tcn_pull = self.tcn_pull()
         self.auc_all = []
         tcn = self.tcn(input)
         time_extractor = self.time_extractor(tcn)
@@ -922,17 +1042,17 @@ class protatype_ehr():
         for epoch in range(self.pre_train_epoch):
             print("\nStart of epoch %d" % (epoch,))
 
-            extract_val, global_val = self.model_extractor(self.val_data)
+            extract_val, global_val,k = self.model_extractor(self.val_data)
             prediction_val = self.projection_layer(global_val)
             self.check_prediction_val = prediction_val
             val_acc = roc_auc_score(self.val_logit, prediction_val)
             print("auc")
             print(val_acc)
             self.auc_all.append(val_acc)
-            for step, (x_batch_train, y_batch_train) in enumerate(self.train_dataset):
+            for step, (x_batch_train, y_batch_train,on_site_time) in enumerate(self.train_dataset):
 
                 with tf.GradientTape() as tape:
-                    extract_time,global_pull = self.model_extractor(x_batch_train)
+                    extract_time,global_pull,k = self.model_extractor(x_batch_train)
                     prediction = self.projection_layer(global_pull)
                     #self.check_global_pull = global_pull
                     #prediction = self.tcn_model(x_batch_train)
@@ -956,6 +1076,65 @@ class protatype_ehr():
 
                     self.loss_track.append(loss)
                     #self.loss_prob_track.append(loss_prob)
+
+
+    def train_standard(self):
+        #input = layers.Input((self.time_sequence, self.feature_num))
+        self.tcn = self.tcn_encoder_second_last_level()
+        #tcn = self.tcn(input)
+        self.auc_all = []
+        self.loss_track = []
+        #self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
+        self.projection_layer = self.project_logit()
+        self.bceloss = tf.keras.losses.BinaryCrossentropy()
+
+        for epoch in range(self.pre_train_epoch):
+            print("\nStart of epoch %d" % (epoch,))
+
+            #extract_val, global_val,k = self.model_extractor(self.val_data)
+            tcn_temporal_output_val = self.tcn(self.val_data)
+            last_layer_output_val = tcn_temporal_output_val[1]
+            on_site_extract_val = [last_layer_output_val[i,int(self.val_on_site_time[i]-1),:] for i in range(self.val_on_site_time.shape[0])]
+            on_site_extract_array_val = tf.stack(on_site_extract_val)
+            prediction_val = self.projection_layer(on_site_extract_array_val)
+            self.check_prediction_val = prediction_val
+            val_acc = roc_auc_score(self.val_logit, prediction_val)
+            print("auc")
+            print(val_acc)
+            self.auc_all.append(val_acc)
+            for step, (x_batch_train, y_batch_train, on_site_time) in enumerate(self.train_dataset):
+                self.check_x_batch = x_batch_train
+                self.check_on_site_time = on_site_time
+                self.check_label = y_batch_train
+                with tf.GradientTape() as tape:
+                    tcn_temporal_output = self.tcn(x_batch_train)
+                    self.check_output = tcn_temporal_output
+                    last_layer_output = tcn_temporal_output[1]
+                    on_site_extract = [last_layer_output[i,int(on_site_time[i]-1),:] for i in range(on_site_time.shape[0])]
+                    on_site_extract_array = tf.stack(on_site_extract)
+                    prediction = self.projection_layer(on_site_extract_array)
+                    loss = self.bceloss(y_batch_train, prediction)
+                    self.check_prediction = prediction
+
+                gradients = \
+                    tape.gradient(loss,
+                                  self.tcn.trainable_variables + self.projection_layer.trainable_weights)
+                optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
+
+                optimizer.apply_gradients(zip(gradients,
+                                              self.tcn.trainable_variables + self.projection_layer.trainable_weights))
+
+                if step % 20 == 0:
+                    print("Training loss(for one batch) at step %d: %.4f"
+                          % (step, float(loss)))
+                    print("seen so far: %s samples" % ((step + 1) * self.batch_size))
+
+                    self.loss_track.append(loss)
+
+
+
+
+
 
 
 
@@ -984,8 +1163,8 @@ class protatype_ehr():
         """
         buuild non att model
         """
-        inputs = layers.Input((self.time_sequence, 35))
-        inputs_mask = layers.Masking(mask_value=0, input_shape=(self.time_sequence, 35))(inputs)
+        inputs = layers.Input((self.time_sequence, self.feature_num))
+        inputs_mask = layers.Masking(mask_value=0, input_shape=(self.time_sequence, self.feature_num))(inputs)
         #self.lstm = self.lstm_encoder()
         self.lstm = self.tcn_encoder_second_last_level()
         self.lstm_pool = self.tcn_pull()

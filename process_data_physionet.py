@@ -6,7 +6,7 @@ import pandas as pd
 import json
 from os import listdir
 from seqehr_origin import seq_seq_ehr
-from protatype_learning import protatype_ehr, projection
+from integrate_hour_extraction import protatype_ehr, projection
 #from tcn_prospective import seq_seq_ehr
 
 
@@ -16,6 +16,7 @@ class read_data():
     """
     def __init__(self):
         self.file_path = '/home/tingyi/physionet_data/training_setA/training/'
+        self.file_path_val = '/home/tingyi/physionet_data/training_setB/training/'
         self.file_names = listdir(self.file_path)
         self.train_prop = 0.7
         self.test_prop = 0.3
@@ -43,7 +44,7 @@ class read_data():
         self.dic_item_male = {}
         self.dic_item_sepsis = {}
         self.dic_item_non_sepsis = {}
-        self.time_sequence = 24
+        self.time_sequence = 48
 
         self.ave_all = [ 8.38230435e+01,  9.75000000e+01,  3.69060000e+01,  1.18333333e+02,
         7.71140148e+01,  5.90000000e+01,  1.81162791e+01,  0.00000000e+00,
@@ -110,9 +111,17 @@ class read_data():
         if 1 in self.patient_table[:, 40]:
             label = 1
             self.sepsis_on_set_time = np.where(self.patient_table[:, 40] == 1)[0][0]
+            if self.sepsis_on_set_time < 6:
+                self.sepsis_on_set_time = np.shape(self.patient_table)[0]
+            if self.sepsis_on_set_time > self.time_sequence:
+                self.sepsis_on_set_time = self.time_sequence
+                label = 0
         else:
             label = 0
-            self.sepsis_on_set_time = np.shape(self.patient_table)[0]/2
+            #self.sepsis_on_set_time = np.shape(self.patient_table)[0]/2
+            self.sepsis_on_set_time = np.shape(self.patient_table)[0]
+            if self.sepsis_on_set_time > self.time_sequence:
+                self.sepsis_on_set_time = self.time_sequence
 
         self.one_data_logit = label
         self.return_value()
@@ -179,28 +188,57 @@ class read_data():
         length = len(data)
         self.data = np.zeros((length,self.time_sequence,34))
         self.data_origin = np.zeros((length,self.time_sequence,34))
-        self.logit = np.zeros((length,self.time_sequence))
+        self.logit = np.zeros(length)
+        self.on_site_time = np.zeros(length)
         self.mask = np.zeros((length,self.time_sequence))
         for i in range(length):
+            print(i)
             name = data[i]
             self.read_table(name)
             self.data[i,:,:] = self.one_data_tensor
             self.data_origin[i,:,:] = self.one_data_tensor_origin
-            self.logit[i,:] = self.one_data_logit
+            self.logit[i] = self.one_data_logit
+            self.on_site_time[i] = self.sepsis_on_set_time
 
 
     def store_train_data(self):
-        file_path = '/home/tingyi/physionet_data/'
-        with open(file_path + 'train_34.npy', 'wb') as f:
+        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        with open(file_path + 'train.npy', 'wb') as f:
             np.save(f,self.data)
 
+        with open(file_path + 'train_origin.npy', 'wb') as f:
+            np.save(f,self.data_origin)
 
+        with open(file_path + 'train_logit.npy', 'wb') as f:
+            np.save(f,self.logit)
+
+        with open(file_path + 'train_on_site_time.npy', 'wb') as f:
+            np.save(f,self.on_site_time)
+
+    def store_val_data(self):
+        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        with open(file_path + 'val.npy', 'wb') as f:
+            np.save(f,self.data)
+
+        with open(file_path + 'val_origin.npy', 'wb') as f:
+            np.save(f,self.data_origin)
+
+        with open(file_path + 'val_logit.npy', 'wb') as f:
+            np.save(f,self.logit)
+
+        with open(file_path + 'val_on_site_time.npy', 'wb') as f:
+            np.save(f,self.on_site_time)
+
+
+
+    """
     def return_value(self):
         self.one_data_tensor = np.zeros((self.time_sequence, 34))
         self.one_data_tensor_origin = np.zeros((self.time_sequence, 34))
         self.one_data_sofa = np.zeros(4)
         self.one_data_sofa_score = np.zeros(4)
-        self.start_window = np.int(np.floor(self.sepsis_on_set_time - self.time_sequence + 1))
+        #self.start_window = np.int(np.floor(self.sepsis_on_set_time - self.time_sequence + 1))
+        self.start_window = 0
         if self.start_window < 0:
             self.start_window = 0
 
@@ -218,6 +256,78 @@ class read_data():
                         self.one_data_tensor[j,i] = \
                             (self.patient_table[time,i] - self.ave_all[i])/self.std_all[i]
                         self.one_data_tensor_origin[j,i] = self.patient_table[time,i]
+    """
+
+    def return_value(self):
+        self.one_data_tensor = np.zeros((self.time_sequence, 34))
+        self.one_data_tensor_origin = np.zeros((self.time_sequence, 34))
+        self.one_data_sofa = np.zeros(4)
+        self.one_data_sofa_score = np.zeros(4)
+        #self.start_window = np.int(np.floor(self.sepsis_on_set_time - self.time_sequence + 1))
+        self.start_window = 0
+
+        if self.start_window < 0:
+            self.start_window = 0
+
+        for i in range(34):
+            if self.std_all[i] == 0:
+                continue
+            else:
+                for j in range(self.time_sequence):
+                    time = j + self.start_window
+                    if j + self.start_window > self.patient_table.shape[0] - 1:
+                        time = self.patient_table.shape[0] - 1
+                    if np.isnan(self.patient_table[time, i]):
+                        continue
+                    else:
+                        self.one_data_tensor[j, i] = \
+                            (self.patient_table[time, i] - self.ave_all[i]) / self.std_all[i]
+                        self.one_data_tensor_origin[j, i] = self.patient_table[time, i]
+
+        for i in range(34):
+            self.check_i = i
+            zero_first = np.where(self.one_data_tensor[:,i]==0)[0]
+            zero_num = zero_first.shape[0]
+            self.check_zero_num = zero_num
+            self.check_zero_first = zero_first
+            if zero_num == self.time_sequence:
+                continue
+            elif zero_num == 0:
+                continue
+            elif zero_first[0] == 0:
+                non_zero_first = np.where(self.one_data_tensor[:,i]!=0)[0][0]
+                self.one_data_tensor[0,i] = self.one_data_tensor[non_zero_first,i]
+                a = pd.Series(self.one_data_tensor[:,i])
+                a.replace(0,np.NaN,inplace=True)
+                self.one_data_tensor[:,i] = a.interpolate()
+            else:
+                a = pd.Series(self.one_data_tensor[:,i])
+                a.replace(0, np.NaN, inplace=True)
+                self.one_data_tensor[:,i] = a.interpolate()
+
+        for i in range(34):
+            self.check_i = i
+            zero_first = np.where(self.one_data_tensor_origin[:,i]==0)[0]
+            zero_num = zero_first.shape[0]
+            self.check_zero_num = zero_num
+            self.check_zero_first = zero_first
+            if zero_num == self.time_sequence:
+                continue
+            elif zero_num == 0:
+                continue
+            elif zero_first[0] == 0:
+                non_zero_first = np.where(self.one_data_tensor_origin[:,i]!=0)[0][0]
+                self.one_data_tensor_origin[0,i] = self.one_data_tensor_origin[non_zero_first,i]
+                a = pd.Series(self.one_data_tensor_origin[:,i])
+                a.replace(0,np.NaN,inplace=True)
+                self.one_data_tensor_origin[:,i] = a.interpolate()
+            else:
+                a = pd.Series(self.one_data_tensor_origin[:,i])
+                a.replace(0, np.NaN, inplace=True)
+                self.one_data_tensor_origin[:,i] = a.interpolate()
+
+
+
         """
         self.one_data_sofa[0] = np.mean(self.one_data_tensor_origin[:,self.cardiovas_index])
         self.one_data_sofa[1] = np.mean(self.one_data_tensor_origin[:,self.liver_index])
