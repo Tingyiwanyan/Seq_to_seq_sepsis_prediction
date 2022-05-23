@@ -2,7 +2,7 @@ from tensorflow.keras import layers
 from tensorflow.keras import regularizers
 import tensorflow as tf
 from sklearn.cluster import KMeans
-from tcn import TCN
+#from tcn import TCN
 from tensorflow import keras
 from scipy.stats import ortho_group
 from sklearn.metrics import roc_auc_score
