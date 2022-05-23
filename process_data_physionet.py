@@ -5,7 +5,7 @@ import time
 import pandas as pd
 import json
 from os import listdir
-from seqehr_origin import seq_seq_ehr
+#from seqehr_origin import seq_seq_ehr
 from integrate_hour_extraction import protatype_ehr, projection
 #from tcn_prospective import seq_seq_ehr
 
