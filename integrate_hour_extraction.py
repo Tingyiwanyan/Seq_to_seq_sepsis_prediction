@@ -36,16 +36,18 @@ class projection(keras.layers.Layer):
 
 
 class protatype_ehr():
-    def __init__(self, read_d, projection):
-        self.read_d = read_d
+    def __init__(self, projection):
+        #self.read_d = read_d
         self.projection_model = projection
-        self.train_data = read_d.train_data
-        self.test_data = read_d.test_data
-        self.validate_data = read_d.val_data
-        self.length_train = len(self.train_data)
-        self.length_test = len(self.test_data)
-        self.length_val = len(self.validate_data)
+        #self.train_data = read_d.train_data
+        #self.test_data = read_d.test_data
+        #self.validate_data = read_d.val_data
+        #self.length_train = len(self.train_data)
+        #self.length_test = len(self.test_data)
+        #self.length_val = len(self.validate_data)
         self.loss_tracker = tf.keras.metrics.Mean(name="loss")
+        self.create_memory_bank()
+        self.length_train = len(self.train_data)
 
         """
         define hyper-parameters
@@ -63,7 +65,7 @@ class protatype_ehr():
         self.pre_train_epoch = 15
         self.latent_dim = latent_dim_global
         self.tau = 1
-        self.time_sequence = self.read_d.time_sequence
+        self.time_sequence = 48#self.read_d.time_sequence
         self.tcn_filter_size = 3
         self.semantic_time_step = semantic_step_global
         self.unsupervised_cluster_num = unsupervised_cluster_num

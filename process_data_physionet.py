@@ -506,6 +506,6 @@ class read_data():
 
 
 if __name__ == "__main__":
-    read_d = read_data()
+    #read_d = read_data()
     #seq = seq_seq_ehr(read_d)
-    seq = protatype_ehr(read_d,projection)
+    seq = protatype_ehr(projection)
