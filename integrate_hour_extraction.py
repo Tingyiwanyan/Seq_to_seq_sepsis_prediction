@@ -46,8 +46,7 @@ class protatype_ehr():
         #self.length_test = len(self.test_data)
         #self.length_val = len(self.validate_data)
         self.loss_tracker = tf.keras.metrics.Mean(name="loss")
-        self.create_memory_bank()
-        self.length_train = len(self.train_data)
+
 
         """
         define hyper-parameters
@@ -76,6 +75,9 @@ class protatype_ehr():
         self.semantic_positive_sample = semantic_positive_sample
         self.max_value_projection = np.zeros((self.batch_size, self.semantic_time_step))
         self.basis_input = np.ones((self.unsupervised_cluster_num, self.latent_dim))
+
+        self.create_memory_bank()
+        self.length_train = len(self.train_data)
 
         """
         initialize orthogonal projection basis
