@@ -1,22 +1,10 @@
 from tensorflow.keras import layers
-from tensorflow.keras import regularizers
 import tensorflow as tf
-from sklearn.cluster import KMeans
-#from tcn import TCN
 from tensorflow import keras
 from scipy.stats import ortho_group
 from sklearn.metrics import roc_auc_score
-import numpy_indexed as npi
-from numpy import savetxt
-
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
-#import umap.umap_ as umap
-#import seaborn as sns
-import pandas as pd
-from sklearn import metrics
-from scipy.spatial.distance import cdist
-
 import numpy as np
 import random
 
