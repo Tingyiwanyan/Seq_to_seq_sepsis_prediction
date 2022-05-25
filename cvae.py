@@ -506,24 +506,9 @@ class protatype_ehr():
         # dilation5 = 16
 
         """
-        define the identical resolution
-        """
-        inputs = layers.Input((self.time_sequence, self.feature_num))
-        # tcn_conv0 = tf.keras.layers.Conv1D(self.latent_dim, self.tcn_filter_size, activation='relu',
-        # dilation_rate=dilation1, padding='valid')
-        tcn_conv0 = tf.keras.layers.Conv1D(self.latent_dim, 1, activation='relu', dilation_rate=1, padding='valid')
-        #tcn_conv0_ = tf.keras.layers.Conv1D(self.latent_dim, 1, activation='relu', dilation_rate=1, padding='valid')
-        layernorm1 = tf.keras.layers.BatchNormalization()
-        # padding_1 = (self.tcn_filter_size - 1) * dilation1
-        # inputs1 = tf.pad(inputs, tf.constant([[0, 0], [1, 0], [0, 0]]) * padding_1)
-        self.outputs0 = tcn_conv0(inputs)
-        #self.outputs0 = tcn_conv0_(outputs0)
-        # self.outputs1 = conv1_identity(self.outputs1)
-
-        """
         define the first tcn layer, dilation=1
         """
-        # inputs = layers.Input((self.time_sequence,self.feature_num))
+        inputs = layers.Input((self.time_sequence,self.feature_num))
         tcn_conv1 = tf.keras.layers.Conv1D(self.latent_dim, self.tcn_filter_size, activation='relu',
                                            dilation_rate=dilation1, padding='valid')
         conv1_identity = tf.keras.layers.Conv1D(self.latent_dim, 1, activation='relu', dilation_rate=1)
@@ -531,7 +516,7 @@ class protatype_ehr():
         padding_1 = (self.tcn_filter_size - 1) * dilation1
         # inputs1 = tf.pad(inputs, tf.constant([[0,0],[1,0],[0,0]]) * padding_1)
 
-        inputs1 = tf.pad(self.outputs0, tf.constant([[0, 0], [1, 0], [0, 0]]) * padding_1)
+        inputs1 = tf.pad(inputs, tf.constant([[0, 0], [1, 0], [0, 0]]) * padding_1)
         self.outputs1 = tcn_conv1(inputs1)
         self.outputs1 = conv1_identity(self.outputs1)
         # self.outputs1 = layernorm1(self.outputs1)
@@ -583,7 +568,7 @@ class protatype_ehr():
         # self.outputs4 = layernorm4(self.outputs4)
 
         return tf.keras.Model(inputs,
-                              [inputs, self.outputs4, self.outputs3, self.outputs2, self.outputs1, self.outputs0],
+                              [inputs, self.outputs4, self.outputs3, self.outputs2, self.outputs1],
                               name='tcn_encoder')
 
     def lstm_split_multi(self):
@@ -620,33 +605,6 @@ class protatype_ehr():
             name="position_projection",
         )
         return model
-
-
-
-    def position_encoding(self, pos):
-        pos_embedding = np.zeros(self.latent_dim)
-        for i in range(self.latent_dim):
-            if i % 2 == 0:
-                pos_embedding[i] = np.sin(pos / (np.power(self.semantic_positive_sample, 2 * i / self.latent_dim)))
-            else:
-                pos_embedding[i] = np.cos(pos / (np.power(self.semantic_positive_sample, 2 * i / self.latent_dim)))
-
-        return tf.math.l2_normalize(pos_embedding)
-
-
-    def reconstruct_semantic_1_lvl(self):
-        self.reconstruct_semantic_origin = np.zeros((self.unsupervised_cluster_num, 1, self.feature_num))
-        projection_basis = tf.expand_dims(self.check_projection_basis,1)
-        self.reconstruct_semantic_norm = self.tcn_1_lvl(projection_basis)
-
-        for k in range(self.unsupervised_cluster_num):
-            for i in range(self.feature_num):
-                if self.read_d.std_all[i] == 0:
-                    self.reconstruct_semantic_origin[:,:,i] = self.read_d.ave_all[i]
-                else:
-                    self.reconstruct_semantic_origin[k, 0, i] = \
-                        (self.reconstruct_semantic_norm[k, 0, i] * self.read_d.std_all[i]) + self.read_d.ave_all[i]
-
 
     def train_standard(self):
         # input = layers.Input((self.time_sequence, self.feature_num))
