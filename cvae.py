@@ -669,17 +669,6 @@ class protatype_ehr():
         self.auc_all = []
         self.loss_track = []
         # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
-        self.projection_layer = self.project_logit()
-        self.position_project = self.position_project_layer()
-        self.bceloss = tf.keras.losses.BinaryCrossentropy()
-
-        position_encode_whole = np.zeros((self.semantic_positive_sample, self.latent_dim))
-        for i in range(self.semantic_positive_sample):
-            position_encode_whole[i, :] = self.position_encoding(i)
-
-        position_encode_whole = tf.expand_dims(position_encode_whole,0)
-
-        position_encode_whole = tf.cast(position_encode_whole,tf.float64)
 
         for epoch in range(self.pre_train_epoch):
             print("\nStart of epoch %d" % (epoch,))
@@ -765,26 +754,6 @@ class protatype_ehr():
                                                        on_site_time_control, x_batch_train_control)
 
                     self.check_temporal_semantic = temporal_semantic
-                    temporal_semantic_position = \
-                        tf.math.add(temporal_semantic, position_encode_whole)
-                    temporal_semantic_position_cohort = \
-                        tf.math.add(temporal_semantic_cohort, position_encode_whole)
-                    temporal_semantic_position_control = \
-                        tf.math.add(temporal_semantic_control, position_encode_whole)
-
-                    batch_semantic_temporal_feature_seperate = self.position_project(temporal_semantic_position)
-                    batch_semantic_temporal_feature = tf.reduce_sum(batch_semantic_temporal_feature_seperate, 1)
-                    self.check_batch_semantic_temporal_feature = batch_semantic_temporal_feature
-
-                    batch_semantic_temporal_feature_seperate_cohort = \
-                        self.position_project(temporal_semantic_position_cohort)
-                    batch_semantic_temporal_feature_cohort = \
-                        tf.reduce_sum(batch_semantic_temporal_feature_seperate_cohort, 1)
-
-                    batch_semantic_temporal_feature_seperate_control = \
-                        self.position_project(temporal_semantic_position_control)
-                    batch_semantic_temporal_feature_control = \
-                        tf.reduce_sum(batch_semantic_temporal_feature_seperate_control, 1)
 
                     tsl_cl_loss = self.info_nce_loss(batch_semantic_temporal_feature,batch_semantic_temporal_feature_cohort,
                                                 batch_semantic_temporal_feature_control,y_batch_train)
@@ -838,22 +807,10 @@ class protatype_ehr():
         temporal_semantic_whole, sample_sequence_batch_whole, temporal_semantic_origin_whole = \
             self.extract_temporal_semantic(output_1h_resolution_whole, self.train_on_site_time, self.train_data)
 
-        position_encode_whole = np.zeros((self.semantic_positive_sample, self.latent_dim))
-        for i in range(self.semantic_positive_sample):
-            position_encode_whole[i, :] = self.position_encoding(i)
-
-        position_encode_whole = tf.expand_dims(position_encode_whole,0)
         self.check_vis_temporal = temporal_semantic_whole
 
-        temporal_semantic_position = \
-            tf.math.add(temporal_semantic_whole, position_encode_whole)
-        self.check_temporal_popsition = temporal_semantic_position
 
-        batch_semantic_temporal_feature_seperate = self.position_project(temporal_semantic_position)
-        self.check_temporal_position_seperate = batch_semantic_temporal_feature_seperate
-
-        batch_semantic_temporal_feature = tf.reduce_sum(batch_semantic_temporal_feature_seperate, 1)
-        CL_k = TSNE(n_components=2).fit_transform(batch_semantic_temporal_feature[0:5000,:])
+        CL_k = TSNE(n_components=2).fit_transform(temporal_semantic_whole[0:5000,:])
 
         for i in range(5000):
             if self.train_logit[i] == 0:
