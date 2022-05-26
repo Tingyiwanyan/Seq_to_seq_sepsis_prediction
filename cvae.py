@@ -333,12 +333,25 @@ class protatype_ehr():
             sample_sequence_batch[k, :] = sample_sequence
             sample_sequence = tf.cast(sample_sequence,tf.int32)
 
-            #for j in range(self.semantic_positive_sample):
+            sample_sequence_origin = np.zeros((self.semantic_positive_sample,self.tcn_filter_size,
+                                               x_batch_origin.shape[-1]))
+            for j in range(self.semantic_positive_sample):
                 #sample_sequence_feature[j, :] = x_batch_feature[k, int(sample_sequence[j]), :]
-                #sample_sequence_origin[j, :] = x_batch_origin[k, int(sample_sequence[j]), :]
+                if int(sample_sequence[j])==0:
+                    sample_sequence_origin[j,:,:] = x_batch_origin[k,0,:]
+                if int(sample_sequence[j])<self.tcn_filter_size:
+                    for jj in range(self.tcn_filter_size):
+                        if jj < self.tcn_filter_size-int(sample_sequence[j]):
+                            sample_sequence_origin[j,jj,:] = x_batch_origin[k,0,:]
+                        else:
+                            sample_sequence_origin[j,jj,:] = x_batch_origin[k,jj-sample_sequence[j],:]
+
+
+
+                #sample_sequence_origin[j, :,:] = x_batch_origin[k, int(sample_sequence[j]), :]
 
             sample_sequence_feature = tf.gather(x_batch_feature[k,:,:],indices=sample_sequence)
-            sample_sequence_origin = tf.gather(x_batch_origin[k,:,:],indices=sample_sequence)
+            #sample_sequence_origin = tf.gather(x_batch_origin[k,:,:],indices=sample_sequence)
 
 
             temporal_semantic.append(sample_sequence_feature)
