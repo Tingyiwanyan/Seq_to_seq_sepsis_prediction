@@ -699,6 +699,7 @@ class protatype_ehr():
             print(val_acc)
             self.auc_all.append(val_acc)
 
+            """
             tcn_temporal_output_whole = self.tcn(self.train_data)
             output_1h_resolution_whole = tcn_temporal_output_whole[5]
             # on_site_extract_whole = [last_layer_output[i, np.abs(int(self.train_on_site_time[i] - 1)), :] for i in
@@ -716,7 +717,7 @@ class protatype_ehr():
 
             self.check_order_input_total_init = order_input_total_init
             self.check_projection_group_total = projection_cluster
-
+            """
 
             for step, (x_batch_train, y_batch_train, on_site_time, semantic_origin) in enumerate(self.train_dataset):
                 self.check_x_batch = x_batch_train
