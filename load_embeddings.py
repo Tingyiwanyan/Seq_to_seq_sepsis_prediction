@@ -39,5 +39,20 @@ class load_embeddings():
 
         plt.show()
 
+    def vis_embedding_all_load(self):
+        CL_k = TSNE(n_components=2).fit_transform(self.temporal_semantic_embedding[0:3000, :])
+        CL_k_on_site = TSNE(n_components=2).fit_transform(np.array(self.on_site_embedding)[0:3000, :])
+
+        for i in range(3000):
+            if self.on_site_logit[i] == 0:
+                plt.plot(CL_k[i][0], CL_k[i][1], 'o', color='blue', markersize=1)
+                plt.plot(CL_k_on_site[i][0], CL_k_on_site[i][1], 'o', color='yellow', markersize=1)
+            if self.on_site_logit[i] == 1:
+                plt.plot(CL_k[i][0], CL_k[i][1], 'o', color='red', markersize=5)
+                plt.plot(CL_k_on_site[i][0], CL_k_on_site[i][1], 'o', color='green', markersize=5)
+
+
+        plt.show()
+
 if __name__ == "__main__":
     l = load_embeddings()

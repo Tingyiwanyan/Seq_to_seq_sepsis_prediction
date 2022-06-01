@@ -835,7 +835,7 @@ class protatype_ehr():
 
                 if step % 20 == 0:
                     print("Training loss(for one batch) at step %d: %.4f"
-                          % (step, float(loss)))
+                          % (step, float(progression_loss)))
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
 
                     self.loss_track.append(loss)
