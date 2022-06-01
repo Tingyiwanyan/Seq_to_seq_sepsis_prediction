@@ -845,6 +845,7 @@ class protatype_ehr():
         train = self.tcn(self.train_data)[1]
         train_embedding = [train[i,np.abs(int(self.train_on_site_time[i] - 1)), :] for i in
                                        range(self.train_on_site_time.shape[0])]
+        self.train_embedding = train_embedding
 
         CL_k = TSNE(n_components=2).fit_transform(np.array(train_embedding)[0:5000,:])
         for i in range(5000):
@@ -855,13 +856,15 @@ class protatype_ehr():
 
         plt.show()
 
+
     def vis_embedding_tsl(self):
         plt.cla()
         output_1h_resolution_whole = self.tcn(self.train_data)[4]
         temporal_semantic_whole, sample_sequence_batch_whole, temporal_semantic_origin_whole = \
             self.extract_temporal_semantic(output_1h_resolution_whole, self.train_on_site_time, self.train_data)
 
-        self.check_vis_temporal = temporal_semantic_whole
+        temporal_semantic_whole = tf.squeeze(temporal_semantic_whole)
+        self.check_vis_temporal = tf.squeeze(temporal_semantic_whole)
 
 
         CL_k = TSNE(n_components=2).fit_transform(temporal_semantic_whole[0:5000,:])
@@ -873,6 +876,64 @@ class protatype_ehr():
                 plt.plot(CL_k[i][0], CL_k[i][1], 'o', color='red', markersize=5)
 
         plt.show()
+
+    def save_embedding(self):
+        train = self.tcn(self.train_data)[1]
+        train_embedding = [train[i, np.abs(int(self.train_on_site_time[i] - 1)), :] for i in
+                           range(self.train_on_site_time.shape[0])]
+
+        output_1h_resolution_whole = self.tcn(self.train_data)[4]
+        temporal_semantic_whole, sample_sequence_batch_whole, temporal_semantic_origin_whole = \
+            self.extract_temporal_semantic(output_1h_resolution_whole, self.train_on_site_time, self.train_data)
+
+        temporal_semantic_whole = tf.squeeze(temporal_semantic_whole)
+        self.check_vis_temporal = tf.squeeze(temporal_semantic_whole)
+
+        train_embedding = np.array(train_embedding)
+        self.train_embedding = train_embedding
+
+        with open('on_site_embedding.npy', 'wb') as f:
+            np.save(f, train_embedding)
+
+        with open('on_site_logit.npy','wb') as f:
+            np.save(f,self.train_logit)
+
+        with open('temporal_semantic_embedding.npy','wb') as f:
+            np.save(f,temporal_semantic_whole)
+
+    def load_embedding(self):
+        with open('on_site_embedding.npy', 'rb') as f:
+            self.on_site_embedding = np.load(f)
+        with open('on_site_logit.npy','rb') as f:
+            self.on_site_logit = np.load(f)
+        with open('temporal_semantic_embedding.npy','rb') as f:
+            self.temporal_semantic_embedding = np.load(f)
+
+
+    def vis_embedding_load(self):
+
+        CL_k = TSNE(n_components=2).fit_transform(np.array(self.on_site_embedding)[0:5000,:])
+        for i in range(5000):
+            if self.on_site_logit[i] == 0:
+                plt.plot(CL_k[i][0], CL_k[i][1], 'o', color='blue', markersize=1)
+            if self.on_site_logit[i] == 1:
+                plt.plot(CL_k[i][0], CL_k[i][1], 'o', color='red', markersize=5)
+
+        plt.show()
+
+
+    def vis_embedding_tsl_load(self):
+
+        CL_k = TSNE(n_components=2).fit_transform(self.temporal_semantic_embedding[0:5000,:])
+
+        for i in range(5000):
+            if self.train_logit[i] == 0:
+                plt.plot(CL_k[i][0], CL_k[i][1], 'o', color='blue', markersize=1)
+            if self.train_logit[i] == 1:
+                plt.plot(CL_k[i][0], CL_k[i][1], 'o', color='red', markersize=5)
+
+        plt.show()
+
 
 
     def semantic_combination_recommandation(self):
