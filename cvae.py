@@ -769,11 +769,11 @@ class protatype_ehr():
 
                     self.check_temporal_semantic = temporal_semantic
 
-                    tsl_cl_loss = self.info_nce_loss(batch_semantic_temporal_feature,batch_semantic_temporal_feature_cohort,
-                                                batch_semantic_temporal_feature_control,y_batch_train)
+                    #tsl_cl_loss = self.info_nce_loss(batch_semantic_temporal_feature,batch_semantic_temporal_feature_cohort,
+                                                #batch_semantic_temporal_feature_control,y_batch_train)
 
-                    tsl_loss = self.info_nce_loss(batch_semantic_temporal_feature,on_site_extract_array_cohort,
-                                                on_site_extract_array_control,y_batch_train)
+                    #tsl_loss = self.info_nce_loss(batch_semantic_temporal_feature,on_site_extract_array_cohort,
+                                                #on_site_extract_array_control,y_batch_train)
 
 
                     prediction = self.projection_layer(on_site_extract_array)
@@ -782,14 +782,14 @@ class protatype_ehr():
                     #self.check_prediction = prediction
                     cl_loss = self.info_nce_loss(on_site_extract_array,on_site_extract_array_cohort,
                                               on_site_extract_array_control, y_batch_train)
-                    loss = tsl_cl_loss + tsl_loss + cl_loss
+                    loss =  cl_loss
                 gradients = \
                     tape.gradient(loss,
-                                  self.tcn.trainable_variables+self.position_project.trainable_weights)
+                                  self.tcn.trainable_variables)
                 optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
                 optimizer.apply_gradients(zip(gradients,
-                                              self.tcn.trainable_variables+self.position_project.trainable_weights))#+self.projection_layer.trainable_weights))
+                                              self.tcn.trainable_variables))#+self.projection_layer.trainable_weights))
 
                 if step % 20 == 0:
                     print("Training loss(for one batch) at step %d: %.4f"
