@@ -158,6 +158,7 @@ class protatype_ehr():
 
     def compute_positive_pair(self, z,  global_pull_cohort, global_pull_control, label):
         z = tf.math.l2_normalize(z, axis=-1)
+        z = tf.cast(z,tf.float32)
         global_pull_cohort = tf.math.l2_normalize(global_pull_cohort, axis=-1)
         global_pull_control = tf.math.l2_normalize(global_pull_control, axis=-1)
         #self.check_global_pull_cohort = global_pull_cohort
