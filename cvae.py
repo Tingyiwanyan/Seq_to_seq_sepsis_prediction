@@ -9,7 +9,7 @@ import numpy as np
 import random
 
 semantic_step_global = 6
-semantic_positive_sample = 8
+semantic_positive_sample = 1
 unsupervised_cluster_num = 10
 latent_dim_global = 100
 positive_sample_size = 5
