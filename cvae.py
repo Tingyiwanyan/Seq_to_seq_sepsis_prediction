@@ -238,6 +238,21 @@ class protatype_ehr():
 
         return loss
 
+    def info_nce_loss_progression(self, z, global_pull_cohort, global_pull_control, label):
+        positive_dot_prod_sum = self.compute_positive_pair(z, global_pull_cohort, global_pull_control, label)
+        negative_dot_prod_sum = self.compute_negative_paris(z, global_pull_cohort, global_pull_control, label)
+
+        # self.check_pos_dot_prods_sum = positive_dot_prod_sum
+        negative_dot_prod_sum = tf.expand_dims(negative_dot_prod_sum, 1)
+        # self.check_negative_dot_prods_sum = negative_dot_prod_sum
+
+        denominator = tf.math.add(positive_dot_prod_sum, negative_dot_prod_sum)
+        nomalized_prob_log = tf.math.log(tf.math.divide(positive_dot_prod_sum, denominator))
+        nomalized_prob_log = tf.reduce_sum(nomalized_prob_log, 1)
+        loss = tf.math.negative(tf.reduce_mean(nomalized_prob_log, 0))
+
+        return loss
+
 
     def compute_positive_pairs_prot(self,batch_embedding_whole, projection_basis_whole, semantic_group):
         z = tf.math.l2_normalize(batch_embedding_whole, axis=-1)
