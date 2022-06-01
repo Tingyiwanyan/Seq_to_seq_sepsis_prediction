@@ -784,6 +784,7 @@ class protatype_ehr():
                                                        on_site_time_control, x_batch_train_control)
 
                     self.check_temporal_semantic = temporal_semantic
+                    self.check_on_site_extract = on_site_extract_array
 
                     #tsl_cl_loss = self.info_nce_loss(batch_semantic_temporal_feature,batch_semantic_temporal_feature_cohort,
                                                 #batch_semantic_temporal_feature_control,y_batch_train)
