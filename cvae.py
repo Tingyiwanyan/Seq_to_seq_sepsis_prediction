@@ -206,6 +206,7 @@ class protatype_ehr():
 
         #neg_train_cohort = np.array([global_pull_cohort[i, :] for i in random_indices_cohort])
         #neg_train_control = np.array([global_pull_control[i, :] for i in random_indices_control])
+        z = tf.cast(z,tf.float32)
 
         similarity_matrix_cohort = tf.matmul(z, tf.transpose(global_pull_cohort))
         similarity_matrix_control = tf.matmul(z, tf.transpose(global_pull_control))
