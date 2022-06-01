@@ -238,9 +238,25 @@ class protatype_ehr():
 
         return loss
 
-    def info_nce_loss_progression(self, z, global_pull_cohort, global_pull_control, label):
-        positive_dot_prod_sum = self.compute_positive_pair(z, global_pull_cohort, global_pull_control, label)
-        negative_dot_prod_sum = self.compute_negative_paris(z, global_pull_cohort, global_pull_control, label)
+    def compute_positive_pair_progression(self, z, on_site_extract):
+        z = tf.math.l2_normalize(z, axis=-1)
+        #global_pull_cohort = tf.math.l2_normalize(global_pull_cohort, axis=-1)
+        #global_pull_control = tf.math.l2_normalize(global_pull_control, axis=-1)
+
+        on_site_extract = tf.math.l2_normalize(on_site_extract)
+        # self.check_global_pull_cohort = global_pull_cohort
+
+        similarity_matrix = tf.reduce_sum(tf.multiply(z,on_site_extract),1)
+
+        pos_sum = tf.math.exp(similarity_matrix / self.tau)
+        self.check_pos_sum = pos_sum
+
+        return pos_sum
+
+
+    def info_nce_loss_progression(self, semantic_temporal, on_site_temporal, global_pull_cohort, global_pull_control, label):
+        positive_dot_prod_sum = self.compute_positive_pair_progression(semantic_temporal, on_site_temporal)
+        negative_dot_prod_sum = self.compute_negative_paris(semantic_temporal, global_pull_cohort, global_pull_control, label)
 
         # self.check_pos_dot_prods_sum = positive_dot_prod_sum
         negative_dot_prod_sum = tf.expand_dims(negative_dot_prod_sum, 1)
@@ -782,6 +798,8 @@ class protatype_ehr():
                     temporal_semantic_control, sample_sequence_batch_control, temporal_semantic_origin_control = \
                         self.extract_temporal_semantic(out_put_1h_resolution_control,
                                                        on_site_time_control, x_batch_train_control)
+
+                    temporal_semantic = tf.squeeze(temporal_semantic)
 
                     self.check_temporal_semantic = temporal_semantic
                     self.check_on_site_extract = on_site_extract_array
