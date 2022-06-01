@@ -823,7 +823,7 @@ class protatype_ehr():
                     progression_loss = self.info_nce_loss_progression(temporal_semantic,on_site_extract_array,
                                                                       on_site_extract_array_cohort,
                                                                       on_site_extract_array_control, y_batch_train)
-                    loss =  cl_loss#+progression_loss
+                    loss =  cl_loss+progression_loss
                 gradients = \
                     tape.gradient(loss,
                                   self.tcn.trainable_variables)
