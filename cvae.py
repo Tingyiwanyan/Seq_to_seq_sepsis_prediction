@@ -696,6 +696,7 @@ class protatype_ehr():
         # tcn = self.tcn(input)
         self.auc_all = []
         self.loss_track = []
+        self.projection_layer = self.project_logit()
         # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
 
         for epoch in range(self.pre_train_epoch):
