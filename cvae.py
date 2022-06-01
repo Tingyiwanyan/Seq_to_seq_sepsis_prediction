@@ -256,7 +256,8 @@ class protatype_ehr():
 
 
     def info_nce_loss_progression(self, semantic_temporal, on_site_temporal, global_pull_cohort, global_pull_control, label):
-        positive_dot_prod_sum = self.compute_positive_pair_progression(semantic_temporal, on_site_temporal)
+        #positive_dot_prod_sum = self.compute_positive_pair_progression(semantic_temporal, on_site_temporal)
+        positive_dot_prod_sum = self.compute_positive_pair(semantic_temporal, global_pull_cohort, global_pull_control, label)
         negative_dot_prod_sum = self.compute_negative_paris(semantic_temporal, global_pull_cohort, global_pull_control, label)
 
         # self.check_pos_dot_prods_sum = positive_dot_prod_sum
