@@ -245,7 +245,7 @@ class protatype_ehr():
 
         on_site_extract = tf.math.l2_normalize(on_site_extract)
         # self.check_global_pull_cohort = global_pull_cohort
-
+        z = tf.cast(z,tf.float32)
         similarity_matrix = tf.reduce_sum(tf.multiply(z,on_site_extract),1)
 
         pos_sum = tf.math.exp(similarity_matrix / self.tau)
