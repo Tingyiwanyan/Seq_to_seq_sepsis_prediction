@@ -719,7 +719,7 @@ class protatype_ehr():
         # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
 
         for epoch in range(self.pre_train_epoch):
-            if epoch > 2:
+            if epoch > 1:
                 self.save_embedding(str(epoch))
             print("\nStart of epoch %d" % (epoch,))
 
