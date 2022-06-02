@@ -719,8 +719,8 @@ class protatype_ehr():
         # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
 
         for epoch in range(self.pre_train_epoch):
-            if epoch > 1:
-                self.save_embedding(str(epoch))
+            #if epoch > 1:
+            self.save_embedding(str(epoch))
             print("\nStart of epoch %d" % (epoch,))
 
             # extract_val, global_val,k = self.model_extractor(self.val_data)
@@ -826,10 +826,10 @@ class protatype_ehr():
                     progression_loss = self.info_nce_loss_progression(temporal_semantic,on_site_extract_array,
                                                                       on_site_extract_array_cohort,
                                                                       on_site_extract_array_control, y_batch_train)
-                    if epoch < 2:
-                        loss =  cl_loss#+progression_loss
-                    else:
-                        loss = progression_loss
+                    #if epoch < 2:
+                    loss =  cl_loss+progression_loss
+                    #else:
+                       # loss = progression_loss
                 gradients = \
                     tape.gradient(loss,
                                   self.tcn.trainable_variables)
@@ -902,10 +902,10 @@ class protatype_ehr():
         with open('on_site_embedding'+id+'.npy', 'wb') as f:
             np.save(f, train_embedding)
 
-        with open('on_site_logit'+id+'npy','wb') as f:
+        with open('on_site_logit'+id+'.npy','wb') as f:
             np.save(f,self.train_logit)
 
-        with open('temporal_semantic_embedding'+id+'npy','wb') as f:
+        with open('temporal_semantic_embedding'+id+'.npy','wb') as f:
             np.save(f,temporal_semantic_whole)
 
     def load_embedding(self):
