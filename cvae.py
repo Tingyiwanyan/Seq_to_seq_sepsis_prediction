@@ -719,6 +719,8 @@ class protatype_ehr():
         # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
 
         for epoch in range(self.pre_train_epoch):
+            if epoch > 2:
+                self.save_embedding(str(epoch))
             print("\nStart of epoch %d" % (epoch,))
 
             # extract_val, global_val,k = self.model_extractor(self.val_data)
@@ -879,7 +881,7 @@ class protatype_ehr():
 
         plt.show()
 
-    def save_embedding(self):
+    def save_embedding(self,id):
         train = self.tcn(self.train_data)[1]
         train_embedding = [train[i, np.abs(int(self.train_on_site_time[i] - 1)), :] for i in
                            range(self.train_on_site_time.shape[0])]
@@ -894,13 +896,13 @@ class protatype_ehr():
         train_embedding = np.array(train_embedding)
         self.train_embedding = train_embedding
 
-        with open('on_site_embedding.npy', 'wb') as f:
+        with open('on_site_embedding'+id+'.npy', 'wb') as f:
             np.save(f, train_embedding)
 
-        with open('on_site_logit.npy','wb') as f:
+        with open('on_site_logit'+id+'npy','wb') as f:
             np.save(f,self.train_logit)
 
-        with open('temporal_semantic_embedding.npy','wb') as f:
+        with open('temporal_semantic_embedding'+id+'npy','wb') as f:
             np.save(f,temporal_semantic_whole)
 
     def load_embedding(self):
