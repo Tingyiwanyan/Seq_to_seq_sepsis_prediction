@@ -823,8 +823,13 @@ class protatype_ehr():
                                                        on_site_time_control, x_batch_train_control)
 
                     temporal_semantic = tf.squeeze(temporal_semantic)
+                    temporal_semantic_cohort = tf.squeeze(temporal_semantic_cohort)
+                    temporal_semantic_control = tf.squeeze(temporal_semantic_control)
 
                     temporal_semantic_transit = self.transition_layer(temporal_semantic)
+                    temporal_semantic_cohort_transit = self.transition_layer(temporal_semantic_cohort)
+                    temporal_semantic_control_transit = self.transition_layer(temporal_semantic_control)
+
 
                     self.check_temporal_semantic = temporal_semantic
                     self.check_on_site_extract = on_site_extract_array
@@ -844,8 +849,8 @@ class protatype_ehr():
                                               on_site_extract_array_control, y_batch_train)
 
                     progression_loss = self.info_nce_loss_progression(temporal_semantic_transit,on_site_extract_array,
-                                                                      on_site_extract_array_cohort,
-                                                                      on_site_extract_array_control, y_batch_train)
+                                                                      temporal_semantic_cohort_transit,
+                                                                      temporal_semantic_control_transit, y_batch_train)
                     #if epoch < 2:
                     loss =  cl_loss+progression_loss
                     #else:
