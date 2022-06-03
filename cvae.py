@@ -12,7 +12,7 @@ semantic_step_global = 6
 semantic_positive_sample = 1
 unsupervised_cluster_num = 10
 latent_dim_global = 100
-positive_sample_size = 5
+positive_sample_size = 10
 batch_size = 128
 unsupervised_neg_size = 5
 
@@ -653,6 +653,23 @@ class protatype_ehr():
         )
         return model
 
+    def transition_project_layer(self):
+        model = tf.keras.Sequential(
+            [
+                # Note the AutoEncoder-like structure.
+                layers.Input((self.latent_dim)),
+                # layers.Input((50)),
+                layers.Dense(
+                    self.latent_dim,
+                    # use_bias=False,
+                    kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+                    activation='relu'
+                )
+            ],
+            name="transition_projection",
+        )
+        return model
+
     def train_standard(self):
         # input = layers.Input((self.time_sequence, self.feature_num))
         self.tcn = self.tcn_encoder_second_last_level()
@@ -716,6 +733,7 @@ class protatype_ehr():
         self.auc_all = []
         self.loss_track = []
         self.projection_layer = self.project_logit()
+        self.transition_layer = self.transition_project_layer()
         # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
 
         for epoch in range(self.pre_train_epoch):
@@ -806,6 +824,8 @@ class protatype_ehr():
 
                     temporal_semantic = tf.squeeze(temporal_semantic)
 
+                    temporal_semantic_transit = self.transition_layer(temporal_semantic)
+
                     self.check_temporal_semantic = temporal_semantic
                     self.check_on_site_extract = on_site_extract_array
 
@@ -823,7 +843,7 @@ class protatype_ehr():
                     cl_loss = self.info_nce_loss(on_site_extract_array,on_site_extract_array_cohort,
                                               on_site_extract_array_control, y_batch_train)
 
-                    progression_loss = self.info_nce_loss_progression(temporal_semantic,on_site_extract_array,
+                    progression_loss = self.info_nce_loss_progression(temporal_semantic_transit,on_site_extract_array,
                                                                       on_site_extract_array_cohort,
                                                                       on_site_extract_array_control, y_batch_train)
                     #if epoch < 2:
@@ -832,11 +852,11 @@ class protatype_ehr():
                        # loss = progression_loss
                 gradients = \
                     tape.gradient(loss,
-                                  self.tcn.trainable_variables)
+                                  self.tcn.trainable_variables+self.transition_layer.trainable_variables)
                 optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
                 optimizer.apply_gradients(zip(gradients,
-                                              self.tcn.trainable_variables))#+self.projection_layer.trainable_weights))
+                                              self.tcn.trainable_variables+self.transition_layer.trainable_variables))
 
                 if step % 20 == 0:
                     print("Training loss(for one batch) at step %d: %.4f"
@@ -894,6 +914,7 @@ class protatype_ehr():
             self.extract_temporal_semantic(output_1h_resolution_whole, self.train_on_site_time, self.train_data)
 
         temporal_semantic_whole = tf.squeeze(temporal_semantic_whole)
+        temporal_semantic_whole_transit = self.transition_layer(temporal_semantic_whole)
         self.check_vis_temporal = tf.squeeze(temporal_semantic_whole)
 
         train_embedding = np.array(train_embedding)
@@ -906,7 +927,7 @@ class protatype_ehr():
             np.save(f,self.train_logit)
 
         with open('temporal_semantic_embedding'+id+'.npy','wb') as f:
-            np.save(f,temporal_semantic_whole)
+            np.save(f,temporal_semantic_whole_transit)
 
     def load_embedding(self):
         with open('on_site_embedding.npy', 'rb') as f:
