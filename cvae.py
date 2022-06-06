@@ -738,6 +738,8 @@ class protatype_ehr():
         self.loss_track = []
         self.projection_layer = self.project_logit()
         self.transition_layer = self.transition_project_layer()
+        self.mseloss = tf.keras.losses.MeanSquaredError()
+        self.deconv = self.first_lvl_resolution_deconv()
         # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
 
         for epoch in range(self.pre_train_epoch):
@@ -834,6 +836,9 @@ class protatype_ehr():
                     temporal_semantic_cohort_transit = self.transition_layer(temporal_semantic_cohort)
                     temporal_semantic_control_transit = self.transition_layer(temporal_semantic_control)
 
+                    temporal_semantic_ = tf.expand_dims(temporal_semantic,1)
+                    temporal_semantic_reconstruct = self.deconv(temporal_semantic_)
+                    temporal_semantic_origin = tf.squeeze(temporal_semantic_origin)
 
                     self.check_temporal_semantic = temporal_semantic
                     self.check_on_site_extract = on_site_extract_array
@@ -850,6 +855,9 @@ class protatype_ehr():
 
                     #bceloss = self.bceloss(y_batch_train, prediction)
                     #self.check_prediction = prediction
+
+                    mse_loss = self.mseloss(temporal_semantic_reconstruct,temporal_semantic_origin)
+
                     cl_loss = self.info_nce_loss(on_site_extract_array,on_site_extract_array_cohort,
                                               on_site_extract_array_control, y_batch_train)
 
@@ -857,16 +865,18 @@ class protatype_ehr():
                                                                       temporal_semantic_cohort_transit,
                                                                       temporal_semantic_control_transit, y_batch_train)
                     #if epoch < 2:
-                    loss =  cl_loss+progression_loss
+                    loss = cl_loss+progression_loss+mse_loss
                     #else:
                        # loss = progression_loss
                 gradients = \
                     tape.gradient(loss,
-                                  self.tcn.trainable_variables+self.transition_layer.trainable_variables)
+                                  self.tcn.trainable_variables+self.transition_layer.trainable_variables
+                                  +self.deconv.trainable_variables)
                 optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
                 optimizer.apply_gradients(zip(gradients,
-                                              self.tcn.trainable_variables+self.transition_layer.trainable_variables))
+                                              self.tcn.trainable_variables+self.transition_layer.trainable_variables
+                                              +self.deconv.trainable_variables))
 
                 if step % 20 == 0:
                     print("Training loss(for one batch) at step %d: %.4f"
