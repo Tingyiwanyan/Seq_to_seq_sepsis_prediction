@@ -856,6 +856,9 @@ class protatype_ehr():
                     #bceloss = self.bceloss(y_batch_train, prediction)
                     #self.check_prediction = prediction
 
+                    temporal_semantic_reconstruct = tf.cast(temporal_semantic_reconstruct,tf.float32)
+                    temporal_semantic_origin = tf.cast(temporal_semantic_origin,tf.float32)
+
                     mse_loss = self.mseloss(temporal_semantic_reconstruct,temporal_semantic_origin)
 
                     cl_loss = self.info_nce_loss(on_site_extract_array,on_site_extract_array_cohort,
