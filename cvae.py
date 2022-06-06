@@ -366,6 +366,7 @@ class protatype_ehr():
 
             sample_sequence_batch[k, :] = sample_sequence
             sample_sequence = tf.cast(sample_sequence,tf.int32)
+            self.check_sample_sequence_ = sample_sequence
 
             sample_sequence_origin = np.zeros((self.semantic_positive_sample,self.tcn_filter_size,
                                                x_batch_origin.shape[-1]))
@@ -373,14 +374,17 @@ class protatype_ehr():
                 #sample_sequence_feature[j, :] = x_batch_feature[k, int(sample_sequence[j]), :]
                 if int(sample_sequence[j])==0:
                     sample_sequence_origin[j,:,:] = x_batch_origin[k,0,:]
-                if int(sample_sequence[j])<self.tcn_filter_size:
+                elif int(sample_sequence[j])<self.tcn_filter_size:
+                    compensate = self.tcn_filter_size - int(sample_sequence[j]) - 1
                     for jj in range(self.tcn_filter_size):
-                        if jj < self.tcn_filter_size-int(sample_sequence[j]):
+                        if jj < compensate:
                             sample_sequence_origin[j,jj,:] = x_batch_origin[k,0,:]
                         else:
-                            sample_sequence_origin[j,jj,:] = x_batch_origin[k,jj-sample_sequence[j],:]
-
-
+                            sample_sequence_origin[j,jj,:] = x_batch_origin[k,jj-compensate,:]
+                else:
+                    compensate = int(sample_sequence[j]) - self.tcn_filter_size + 1
+                    for jj in range(self.tcn_filter_size):
+                        sample_sequence_origin[j,jj,:] = x_batch_origin[k,jj+compensate,:]
 
                 #sample_sequence_origin[j, :,:] = x_batch_origin[k, int(sample_sequence[j]), :]
 
@@ -738,7 +742,7 @@ class protatype_ehr():
 
         for epoch in range(self.pre_train_epoch):
             #if epoch > 1:
-            self.save_embedding(str(epoch))
+            #self.save_embedding(str(epoch))
             print("\nStart of epoch %d" % (epoch,))
 
             # extract_val, global_val,k = self.model_extractor(self.val_data)
@@ -833,6 +837,7 @@ class protatype_ehr():
 
                     self.check_temporal_semantic = temporal_semantic
                     self.check_on_site_extract = on_site_extract_array
+                    self.check_temporal_semantic_origin = temporal_semantic_origin
 
                     #tsl_cl_loss = self.info_nce_loss(batch_semantic_temporal_feature,batch_semantic_temporal_feature_cohort,
                                                 #batch_semantic_temporal_feature_control,y_batch_train)
