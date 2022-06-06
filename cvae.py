@@ -882,8 +882,12 @@ class protatype_ehr():
                                               +self.deconv.trainable_variables))
 
                 if step % 20 == 0:
-                    print("Training loss(for one batch) at step %d: %.4f"
+                    print("Training cl_loss(for one batch) at step %d: %.4f"
+                          % (step, float(cl_loss)))
+                    print("Training progression_loss(for one batch) at step %d: %.4f"
                           % (step, float(progression_loss)))
+                    print("Training mse_loss(for one batch) at step %d: %.4f"
+                          % (step, float(mse_loss)))
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
 
                     self.loss_track.append(loss)
