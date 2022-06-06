@@ -273,6 +273,7 @@ class protatype_ehr():
         return loss
 
 
+
     def compute_positive_pairs_prot(self,batch_embedding_whole, projection_basis_whole, semantic_group):
         z = tf.math.l2_normalize(batch_embedding_whole, axis=-1)
         #global_pull_cohort = tf.math.l2_normalize(global_pull_cohort, axis=-1)
@@ -864,11 +865,14 @@ class protatype_ehr():
                     cl_loss = self.info_nce_loss(on_site_extract_array,on_site_extract_array_cohort,
                                               on_site_extract_array_control, y_batch_train)
 
+                    cl_loss_temporal = self.info_nce_loss(temporal_semantic_transit,temporal_semantic_cohort_transit,
+                                                          temporal_semantic_control_transit, y_batch_train)
+
                     progression_loss = self.info_nce_loss_progression(temporal_semantic_transit,on_site_extract_array,
                                                                       temporal_semantic_cohort_transit,
                                                                       temporal_semantic_control_transit, y_batch_train)
                     #if epoch < 2:
-                    loss = cl_loss+progression_loss+mse_loss
+                    loss = cl_loss+progression_loss+cl_loss_temporal+mse_loss
                     #else:
                        # loss = progression_loss
                 gradients = \
@@ -884,6 +888,8 @@ class protatype_ehr():
                 if step % 20 == 0:
                     print("Training cl_loss(for one batch) at step %d: %.4f"
                           % (step, float(cl_loss)))
+                    print("Training cl_loss_temporal(for one batch) at step %d: %.4f"
+                          % (step, float(cl_loss_temporal)))
                     print("Training progression_loss(for one batch) at step %d: %.4f"
                           % (step, float(progression_loss)))
                     print("Training mse_loss(for one batch) at step %d: %.4f"
@@ -893,13 +899,37 @@ class protatype_ehr():
                     self.loss_track.append(loss)
 
     def reconstruct_signal(self):
-        temporal_cohort_on_site_ = self.tcn(self.memory_bank_cohort)
+        temporal_cohort_on_site_ = self.tcn(self.memory_bank_cohort)[1]
+        temporal_cohort_1_lvl_resolution = self.tcn(self.memory_bank_cohort)[4]
+        temporal_control_on_site_ = self.tcn(self.memory_bank_control)[1]
+        temporal_control_1_lvl_resolution = self.tcn(self.memory_bank_control)[4]
         on_site_time_cohort = self.memory_bank_cohort_on_site
+        on_site_time_control = self.memory_bank_control_on_site
         temporal_cohort_on_site = [temporal_cohort_on_site_[i, np.abs(int(on_site_time_cohort[i] - 1)), :] for i
          in range(on_site_time_cohort.shape[0])]
         self.temporal_cohort_on_site = tf.stack(temporal_cohort_on_site)
 
+        self.temporal_control_on_site = [temporal_control_on_site_[i, np.abs(int(on_site_time_control[i] - 1)), :] for i
+                                   in range(on_site_time_control.shape[0])]
+
         self.center_temporal_cohort_on_site = tf.reduce_mean(self.temporal_cohort_on_site,0)
+        self.center_temporal_control_on_site = tf.reduce_mean(self.temporal_control_on_site,0)
+
+        self.temporal_semantic_cohort, sample_sequence_batch_cohort, temporal_semantic_origin_cohort = \
+            self.extract_temporal_semantic(temporal_cohort_1_lvl_resolution,
+                                           on_site_time_cohort, self.memory_bank_cohort)
+
+        self.temporal_semantic_control, sample_sequence_batch_control, temporal_semantic_origin_control = \
+            self.extract_temporal_semantic(temporal_control_1_lvl_resolution,
+                                           on_site_time_control, self.memory_bank_control)
+
+
+
+
+
+
+
+
 
 
 
