@@ -744,7 +744,7 @@ class protatype_ehr():
 
         for epoch in range(self.pre_train_epoch):
             #if epoch > 1:
-            #self.save_embedding(str(epoch))
+            self.save_embedding(str(epoch))
             print("\nStart of epoch %d" % (epoch,))
 
             # extract_val, global_val,k = self.model_extractor(self.val_data)
