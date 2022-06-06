@@ -61,7 +61,7 @@ class protatype_ehr():
         self.blood_length = 27
         self.epoch = 20
         self.feature_num = 34
-        self.pre_train_epoch = 6
+        self.pre_train_epoch = 10
         self.latent_dim = latent_dim_global
         self.tau = 1
         self.time_sequence = 48#self.read_d.time_sequence
@@ -257,8 +257,8 @@ class protatype_ehr():
 
 
     def info_nce_loss_progression(self, semantic_temporal, on_site_temporal, global_pull_cohort, global_pull_control, label):
-        #positive_dot_prod_sum = self.compute_positive_pair_progression(semantic_temporal, on_site_temporal)
-        positive_dot_prod_sum = self.compute_positive_pair(semantic_temporal, global_pull_cohort, global_pull_control, label)
+        positive_dot_prod_sum = self.compute_positive_pair_progression(semantic_temporal, on_site_temporal)
+        #positive_dot_prod_sum = self.compute_positive_pair_progression(semantic_temporal, global_pull_cohort, global_pull_control, label)
         negative_dot_prod_sum = self.compute_negative_paris(semantic_temporal, global_pull_cohort, global_pull_control, label)
 
         # self.check_pos_dot_prods_sum = positive_dot_prod_sum
@@ -891,6 +891,17 @@ class protatype_ehr():
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
 
                     self.loss_track.append(loss)
+
+    def reconstruct_signal(self):
+        temporal_cohort_on_site_ = self.tcn(self.memory_bank_cohort)
+        on_site_time_cohort = self.memory_bank_cohort_on_site
+        temporal_cohort_on_site = [temporal_cohort_on_site_[i, np.abs(int(on_site_time_cohort[i] - 1)), :] for i
+         in range(on_site_time_cohort.shape[0])]
+        self.temporal_cohort_on_site = tf.stack(temporal_cohort_on_site)
+
+        self.center_temporal_cohort_on_site = tf.reduce_mean(self.temporal_cohort_on_site,0)
+
+
 
 
 
