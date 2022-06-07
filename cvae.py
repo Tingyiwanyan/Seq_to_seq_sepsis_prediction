@@ -245,7 +245,7 @@ class protatype_ehr():
         #global_pull_cohort = tf.math.l2_normalize(global_pull_cohort, axis=-1)
         #global_pull_control = tf.math.l2_normalize(global_pull_control, axis=-1)
 
-        on_site_extract = tf.math.l2_normalize(on_site_extract)
+        on_site_extract = tf.math.l2_normalize(on_site_extract,axis=-1)
         # self.check_global_pull_cohort = global_pull_cohort
         z = tf.cast(z,tf.float32)
         similarity_matrix = tf.reduce_sum(tf.multiply(z,on_site_extract),1)
@@ -833,6 +833,10 @@ class protatype_ehr():
                     temporal_semantic_cohort = tf.squeeze(temporal_semantic_cohort)
                     temporal_semantic_control = tf.squeeze(temporal_semantic_control)
 
+                    temporal_semantic = tf.math.l2_normalize(temporal_semantic,axis=-1)
+                    temporal_semantic_cohort = tf.math.l2_normalize(temporal_semantic_cohort,axis=-1)
+                    temporal_semantic_control = tf.math.l2_normalize(temporal_semantic_control,axis=-1)
+
                     temporal_semantic_transit = self.transition_layer(temporal_semantic)
                     temporal_semantic_cohort_transit = self.transition_layer(temporal_semantic_cohort)
                     temporal_semantic_control_transit = self.transition_layer(temporal_semantic_control)
@@ -907,10 +911,11 @@ class protatype_ehr():
         on_site_time_control = self.memory_bank_control_on_site
         temporal_cohort_on_site = [temporal_cohort_on_site_[i, np.abs(int(on_site_time_cohort[i] - 1)), :] for i
          in range(on_site_time_cohort.shape[0])]
-        self.temporal_cohort_on_site = tf.stack(temporal_cohort_on_site)
+        self.temporal_cohort_on_site = tf.math.l2_normalize(tf.stack(temporal_cohort_on_site),axis=-1)
 
-        self.temporal_control_on_site = [temporal_control_on_site_[i, np.abs(int(on_site_time_control[i] - 1)), :] for i
+        temporal_control_on_site = [temporal_control_on_site_[i, np.abs(int(on_site_time_control[i] - 1)), :] for i
                                    in range(on_site_time_control.shape[0])]
+        self.temporal_control_on_site = tf.math.l2_normalize(tf.stack(temporal_control_on_site),axis=-1)
 
         self.center_temporal_cohort_on_site = tf.reduce_mean(self.temporal_cohort_on_site,0)
         self.center_temporal_control_on_site = tf.reduce_mean(self.temporal_control_on_site,0)
@@ -922,6 +927,11 @@ class protatype_ehr():
         self.temporal_semantic_control, sample_sequence_batch_control, temporal_semantic_origin_control = \
             self.extract_temporal_semantic(temporal_control_1_lvl_resolution,
                                            on_site_time_control, self.memory_bank_control)
+
+        self.temporal_semantic_cohort = tf.math.l2_normalize(tf.squeeze(self.temporal_semantic_cohort),axis=-1)
+        self.temporal_semantic_control = tf.math.l2_normalize(tf.squeeze(self.temporal_semantic_control),axis=-1)
+
+
 
     def vis_embedding(self):
         plt.cla()
