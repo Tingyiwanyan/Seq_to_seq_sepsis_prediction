@@ -61,7 +61,7 @@ class protatype_ehr():
         self.blood_length = 27
         self.epoch = 20
         self.feature_num = 34
-        self.pre_train_epoch = 10
+        self.pre_train_epoch = 6
         self.latent_dim = latent_dim_global
         self.tau = 1
         self.time_sequence = 48#self.read_d.time_sequence
@@ -114,8 +114,8 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
-        file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
+        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        #file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -869,8 +869,8 @@ class protatype_ehr():
                                                           temporal_semantic_control_transit, y_batch_train)
 
                     progression_loss = self.info_nce_loss_progression(temporal_semantic_transit,on_site_extract_array,
-                                                                      temporal_semantic_cohort_transit,
-                                                                      temporal_semantic_control_transit, y_batch_train)
+                                                                      on_site_extract_array_cohort,
+                                                                      on_site_extract_array_control, y_batch_train)
                     #if epoch < 2:
                     loss = cl_loss+progression_loss+cl_loss_temporal+mse_loss
                     #else:
