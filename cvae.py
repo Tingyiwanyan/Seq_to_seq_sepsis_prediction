@@ -923,18 +923,6 @@ class protatype_ehr():
             self.extract_temporal_semantic(temporal_control_1_lvl_resolution,
                                            on_site_time_control, self.memory_bank_control)
 
-
-
-
-
-
-
-
-
-
-
-
-
     def vis_embedding(self):
         plt.cla()
         train = self.tcn(self.train_data)[1]
