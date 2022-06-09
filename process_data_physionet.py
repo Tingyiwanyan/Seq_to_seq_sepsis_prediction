@@ -6,7 +6,7 @@ import pandas as pd
 import json
 from os import listdir
 #from seqehr_origin import seq_seq_ehr
-from cvae import protatype_ehr, projection
+from cvae import protatype_ehr, projection, translation
 #from tcn_prospective import seq_seq_ehr
 
 
