@@ -893,11 +893,11 @@ class protatype_ehr():
                                                                       on_site_extract_array_cohort,
                                                                       on_site_extract_array_control, y_batch_train)
                     #if epoch < 2:
-                    if epoch == 0 or epoch % 2 == 0:
-                        loss = cl_loss#+progression_loss+cl_loss_temporal+mse_loss
+                    #if epoch == 0 or epoch % 2 == 0:
+                        #loss = cl_loss#+progression_loss+cl_loss_temporal+mse_loss
 
-                    if epoch % 2 == 1:
-                        loss = progression_loss #+ 0.2*cl_loss_temporal
+                    #if epoch % 2 == 1:
+                    loss = cl_loss_temporal
 
                 if epoch == 0 or epoch % 2 == 0:
                     gradients = \
@@ -919,6 +919,8 @@ class protatype_ehr():
                     if epoch == 0 or epoch % 2 == 0:
                         print("Training cl_loss(for one batch) at step %d: %.4f"
                               % (step, float(cl_loss)))
+                        print("Training cl_loss_temporal(for one batch) at step %d: %.4f"
+                              % (step, float(cl_loss_temporal)))
                     if epoch % 2 == 1:
                         print("Training cl_loss_temporal(for one batch) at step %d: %.4f"
                               % (step, float(cl_loss_temporal)))
