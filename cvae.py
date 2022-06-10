@@ -34,29 +34,11 @@ class projection(keras.layers.Layer):
     def call(self, inputs):
         return tf.math.multiply(inputs, self.w)
 
-class translation(keras.layers.Layer):
-    def __init__(self, input_dim=latent_dim_global):
-        super(translation, self).__init__()
-        w_init = tf.random_normal_initializer()
-        #w_init = tf.keras.initializers.Orthogonal()
-        self.w = tf.Variable(
-            initial_value=w_init(shape=((input_dim,)), dtype="float32"),
-            trainable=True,
-        )
-        # b_init = tf.zeros_initializer()
-        # self.b = tf.Variable(
-        # initial_value=b_init(shape=(units,), dtype="float32"), trainable=True
-        # )
-
-    def call(self, inputs):
-        return tf.math.multiply(inputs, self.w)
-
 
 class protatype_ehr():
-    def __init__(self, projection, translation):
+    def __init__(self, projection):
         #self.read_d = read_d
         self.projection_model = projection
-        self.trainslation_model = translation
         #self.train_data = read_d.train_data
         #self.test_data = read_d.test_data
         #self.validate_data = read_d.val_data
@@ -658,6 +640,22 @@ class protatype_ehr():
         return tf.keras.Model([inputs, inputs2, inputs3, inputs4],
                               [output_query1, output2, output3, output4, output5], name='lstm_split')
 
+    def translation_layer(self):
+        model = tf.keras.Sequential(
+            [
+                # Note the AutoEncoder-like structure.
+                layers.Input((self.latent_dim)),
+                # layers.Input((50)),
+                layers.Dense(
+                    self.latent_dim,
+                    # use_bias=False,
+                    kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+                    activation='relu'
+                )
+            ],
+            name="translation_layer",
+        )
+        return model
 
     def position_project_layer(self):
         model = tf.keras.Sequential(
@@ -684,7 +682,7 @@ class protatype_ehr():
                 # layers.Input((50)),
                 layers.Dense(
                     self.latent_dim,
-                    # use_bias=False,
+                    use_bias=True,
                     kernel_initializer=tf.keras.initializers.he_normal(seed=None),
                     activation='relu'
                 )
@@ -752,7 +750,6 @@ class protatype_ehr():
     def train_cl(self):
         # input = layers.Input((self.time_sequence, self.feature_num))
         self.tcn = self.tcn_encoder_second_last_level()
-        self.translation = self.trainslation_model()
         # tcn = self.tcn(input)
         self.auc_all = []
         self.loss_track = []
@@ -896,28 +893,39 @@ class protatype_ehr():
                                                                       on_site_extract_array_cohort,
                                                                       on_site_extract_array_control, y_batch_train)
                     #if epoch < 2:
-                    loss = cl_loss+progression_loss+cl_loss_temporal+mse_loss
-                    #else:
-                       # loss = progression_loss
-                gradients = \
-                    tape.gradient(loss,
-                                  self.tcn.trainable_variables+self.transition_layer.trainable_variables
-                                  +self.deconv.trainable_variables)
-                optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
+                    if epoch == 0 or epoch % 2 == 0:
+                        loss = cl_loss#+progression_loss+cl_loss_temporal+mse_loss
 
-                optimizer.apply_gradients(zip(gradients,
-                                              self.tcn.trainable_variables+self.transition_layer.trainable_variables
-                                              +self.deconv.trainable_variables))
+                    if epoch % 2 == 1:
+                        loss = progression_loss + cl_loss_temporal
+
+                if epoch == 0 or epoch % 2 == 0:
+                    gradients = \
+                        tape.gradient(loss,
+                                      self.tcn.trainable_variables)#+self.transition_layer.trainable_variables
+                                      #+self.deconv.trainable_variables)
+                    optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
+
+                    optimizer.apply_gradients(zip(gradients,
+                                                  self.tcn.trainable_variables))
+                if epoch % 2 == 1:
+                    gradients = \
+                        tape.gradient(loss, self.transition_layer.trainable_variables)
+                    optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
+
+                    optimizer.apply_gradients(zip(gradients, self.transition_layer.trainable_variables))
 
                 if step % 20 == 0:
-                    print("Training cl_loss(for one batch) at step %d: %.4f"
-                          % (step, float(cl_loss)))
-                    print("Training cl_loss_temporal(for one batch) at step %d: %.4f"
-                          % (step, float(cl_loss_temporal)))
-                    print("Training progression_loss(for one batch) at step %d: %.4f"
-                          % (step, float(progression_loss)))
-                    print("Training mse_loss(for one batch) at step %d: %.4f"
-                          % (step, float(mse_loss)))
+                    if epoch == 0 or epoch % 2 == 0:
+                        print("Training cl_loss(for one batch) at step %d: %.4f"
+                              % (step, float(cl_loss)))
+                    if epoch % 2 == 1:
+                        print("Training cl_loss_temporal(for one batch) at step %d: %.4f"
+                              % (step, float(cl_loss_temporal)))
+                        print("Training progression_loss(for one batch) at step %d: %.4f"
+                              % (step, float(progression_loss)))
+                    #print("Training mse_loss(for one batch) at step %d: %.4f"
+                          #% (step, float(mse_loss)))
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
 
                     self.loss_track.append(loss)
