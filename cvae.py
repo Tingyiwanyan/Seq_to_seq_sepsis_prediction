@@ -897,7 +897,7 @@ class protatype_ehr():
                         #loss = cl_loss#+progression_loss+cl_loss_temporal+mse_loss
 
                     #if epoch % 2 == 1:
-                    loss = cl_loss_temporal
+                    loss = cl_loss+cl_loss_temporal
 
                 if epoch == 0 or epoch % 2 == 0:
                     gradients = \
