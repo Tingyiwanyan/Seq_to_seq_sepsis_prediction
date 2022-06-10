@@ -893,16 +893,16 @@ class protatype_ehr():
                                                                       on_site_extract_array_cohort,
                                                                       on_site_extract_array_control, y_batch_train)
                     #if epoch < 2:
-                    #if epoch == 0 or epoch % 2 == 0:
-                        #loss = cl_loss#+progression_loss+cl_loss_temporal+mse_loss
+                    if epoch == 0 or epoch % 2 == 0:
+                        loss = cl_loss#+progression_loss+cl_loss_temporal+mse_loss
 
-                    #if epoch % 2 == 1:
-                    loss = cl_loss+cl_loss_temporal
+                    if epoch % 2 == 1:
+                        loss = cl_loss_temporal
 
                 if epoch == 0 or epoch % 2 == 0:
                     gradients = \
                         tape.gradient(loss,
-                                      self.tcn.trainable_variables)#+self.transition_layer.trainable_variables
+                                      self.tcn.trainable_variables)
                                       #+self.deconv.trainable_variables)
                     optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
