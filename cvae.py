@@ -20,13 +20,8 @@ unsupervised_neg_size = 5
 class projection(keras.layers.Layer):
     def __init__(self, units=unsupervised_cluster_num, input_dim=latent_dim_global):
         super(projection, self).__init__()
-<<<<<<< HEAD
-        #w_init = tf.random_normal_initializer()
-        w_init = tf.keras.initializers.Orthogonal()
-=======
         w_init = tf.random_normal_initializer()
         #w_init = tf.keras.initializers.Orthogonal()
->>>>>>> b914bdf310ce8a3724ad932fd0a642972b000cf6
         self.w = tf.Variable(
             initial_value=w_init(shape=(units, input_dim), dtype="float32"),
             trainable=True,
