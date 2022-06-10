@@ -20,13 +20,8 @@ unsupervised_neg_size = 5
 class projection(keras.layers.Layer):
     def __init__(self, units=unsupervised_cluster_num, input_dim=latent_dim_global):
         super(projection, self).__init__()
-<<<<<<< HEAD
-        #w_init = tf.random_normal_initializer()
-        w_init = tf.keras.initializers.Orthogonal()
-=======
         w_init = tf.random_normal_initializer()
         #w_init = tf.keras.initializers.Orthogonal()
->>>>>>> b914bdf310ce8a3724ad932fd0a642972b000cf6
         self.w = tf.Variable(
             initial_value=w_init(shape=(units, input_dim), dtype="float32"),
             trainable=True,
@@ -39,29 +34,11 @@ class projection(keras.layers.Layer):
     def call(self, inputs):
         return tf.math.multiply(inputs, self.w)
 
-class translation(keras.layers.Layer):
-    def __init__(self, input_dim=latent_dim_global):
-        super(translation, self).__init__()
-        w_init = tf.random_normal_initializer()
-        #w_init = tf.keras.initializers.Orthogonal()
-        self.w = tf.Variable(
-            initial_value=w_init(shape=((input_dim,)), dtype="float32"),
-            trainable=True,
-        )
-        # b_init = tf.zeros_initializer()
-        # self.b = tf.Variable(
-        # initial_value=b_init(shape=(units,), dtype="float32"), trainable=True
-        # )
-
-    def call(self, inputs):
-        return tf.math.multiply(inputs, self.w)
-
 
 class protatype_ehr():
-    def __init__(self, projection, translation):
+    def __init__(self, projection):
         #self.read_d = read_d
         self.projection_model = projection
-        self.trainslation_model = translation
         #self.train_data = read_d.train_data
         #self.test_data = read_d.test_data
         #self.validate_data = read_d.val_data

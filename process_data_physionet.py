@@ -6,7 +6,7 @@ import pandas as pd
 import json
 from os import listdir
 #from seqehr_origin import seq_seq_ehr
-from cvae import protatype_ehr, projection, translation
+from cvae import protatype_ehr, projection
 #from tcn_prospective import seq_seq_ehr
 
 
@@ -508,4 +508,4 @@ class read_data():
 if __name__ == "__main__":
     #read_d = read_data()
     #seq = seq_seq_ehr(read_d)
-    seq = protatype_ehr(projection,translation)
+    seq = protatype_ehr(projection)
