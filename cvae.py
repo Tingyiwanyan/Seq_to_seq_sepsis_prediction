@@ -893,39 +893,36 @@ class protatype_ehr():
                                                                       on_site_extract_array_cohort,
                                                                       on_site_extract_array_control, y_batch_train)
                     #if epoch < 2:
-                    if epoch == 0 or epoch % 2 == 0:
-                        loss = cl_loss#+progression_loss+cl_loss_temporal+mse_loss
+                    #if epoch == 0 or epoch % 2 == 0:
+                     #   loss = cl_loss#+progression_loss+cl_loss_temporal+mse_loss
 
-                    if epoch % 2 == 1:
-                        loss = cl_loss_temporal
+                    #if epoch % 2 == 1:
+                    loss = cl_loss + cl_loss_temporal
 
-                if epoch == 0 or epoch % 2 == 0:
-                    gradients = \
-                        tape.gradient(loss,
-                                      self.tcn.trainable_variables)
-                                      #+self.deconv.trainable_variables)
-                    optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
+                #if epoch == 0 or epoch % 2 == 0:
+                gradients = \
+                    tape.gradient(loss,
+                                  self.tcn.trainable_variables+self.transition_layer.trainable_variables)
+                                  #+self.deconv.trainable_variables)
+                optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
-                    optimizer.apply_gradients(zip(gradients,
-                                                  self.tcn.trainable_variables))
-                if epoch % 2 == 1:
-                    gradients = \
-                        tape.gradient(loss, self.transition_layer.trainable_variables)
-                    optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
+                optimizer.apply_gradients(zip(gradients,
+                                              self.tcn.trainable_variables+self.transition_layer.trainable_variables))
+                #if epoch % 2 == 1:
+                 #   gradients = \
+                  #      tape.gradient(loss, self.transition_layer.trainable_variables)
+                   # optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
-                    optimizer.apply_gradients(zip(gradients, self.transition_layer.trainable_variables))
+                    #optimizer.apply_gradients(zip(gradients, self.transition_layer.trainable_variables))
 
                 if step % 20 == 0:
-                    if epoch == 0 or epoch % 2 == 0:
-                        print("Training cl_loss(for one batch) at step %d: %.4f"
-                              % (step, float(cl_loss)))
-                        print("Training cl_loss_temporal(for one batch) at step %d: %.4f"
-                              % (step, float(cl_loss_temporal)))
-                    if epoch % 2 == 1:
-                        print("Training cl_loss_temporal(for one batch) at step %d: %.4f"
-                              % (step, float(cl_loss_temporal)))
-                        print("Training progression_loss(for one batch) at step %d: %.4f"
-                              % (step, float(progression_loss)))
+                    #if epoch == 0 or epoch % 2 == 0:
+                    print("Training cl_loss(for one batch) at step %d: %.4f"
+                          % (step, float(cl_loss)))
+                    print("Training cl_loss_temporal(for one batch) at step %d: %.4f"
+                          % (step, float(cl_loss_temporal)))
+                    print("Training progression_loss(for one batch) at step %d: %.4f"
+                          % (step, float(progression_loss)))
                     #print("Training mse_loss(for one batch) at step %d: %.4f"
                           #% (step, float(mse_loss)))
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
