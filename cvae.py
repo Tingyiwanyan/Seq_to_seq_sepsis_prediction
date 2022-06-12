@@ -623,6 +623,37 @@ class protatype_ehr():
                               [inputs, self.outputs4, self.outputs3, self.outputs2, self.outputs1],
                               name='tcn_encoder')
 
+
+    def tcn_first_level(self):
+        """
+        Implement tcn encoder
+        """
+        """
+        define dilation for each layer(24 hours)
+        """
+        dilation1 = 1  # 3 hours
+
+        """
+        define the first tcn layer, dilation=1
+        """
+        inputs = layers.Input((self.time_sequence,self.feature_num))
+        tcn_conv1 = tf.keras.layers.Conv1D(self.latent_dim, self.tcn_filter_size, activation='relu',
+                                           dilation_rate=dilation1, padding='valid')
+        conv1_identity = tf.keras.layers.Conv1D(self.latent_dim, 1, activation='relu', dilation_rate=1)
+        layernorm1 = tf.keras.layers.BatchNormalization()
+        padding_1 = (self.tcn_filter_size - 1) * dilation1
+        # inputs1 = tf.pad(inputs, tf.constant([[0,0],[1,0],[0,0]]) * padding_1)
+
+        inputs1 = tf.pad(inputs, tf.constant([[0, 0], [1, 0], [0, 0]]) * padding_1)
+        self.outputs1_first_lvl = tcn_conv1(inputs1)
+        #self.outputs1 = conv1_identity(self.outputs1)
+        # self.outputs1 = layernorm1(self.outputs1)
+
+
+        return tf.keras.Model(inputs,
+                              [inputs, self.outputs1_first_lvl],
+                              name='tcn_encoder_first_lvl')
+
     def lstm_split_multi(self):
         inputs = layers.Input((self.time_sequence, self.latent_dim))
         inputs2 = layers.Input((self.time_sequence, self.latent_dim))
@@ -690,6 +721,8 @@ class protatype_ehr():
             name="transition_projection",
         )
         return model
+
+
 
     def train_standard(self):
         # input = layers.Input((self.time_sequence, self.feature_num))
