@@ -34,29 +34,11 @@ class projection(keras.layers.Layer):
     def call(self, inputs):
         return tf.math.multiply(inputs, self.w)
 
-class translation(keras.layers.Layer):
-    def __init__(self, input_dim=latent_dim_global):
-        super(translation, self).__init__()
-        w_init = tf.random_normal_initializer()
-        #w_init = tf.keras.initializers.Orthogonal()
-        self.w = tf.Variable(
-            initial_value=w_init(shape=((input_dim,)), dtype="float32"),
-            trainable=True,
-        )
-        # b_init = tf.zeros_initializer()
-        # self.b = tf.Variable(
-        # initial_value=b_init(shape=(units,), dtype="float32"), trainable=True
-        # )
-
-    def call(self, inputs):
-        return tf.math.multiply(inputs, self.w)
-
 
 class protatype_ehr():
-    def __init__(self, projection, translation):
+    def __init__(self, projection):
         #self.read_d = read_d
         self.projection_model = projection
-        self.trainslation_model = translation
         #self.train_data = read_d.train_data
         #self.test_data = read_d.test_data
         #self.validate_data = read_d.val_data
@@ -641,6 +623,37 @@ class protatype_ehr():
                               [inputs, self.outputs4, self.outputs3, self.outputs2, self.outputs1],
                               name='tcn_encoder')
 
+
+    def tcn_first_level(self):
+        """
+        Implement tcn encoder
+        """
+        """
+        define dilation for each layer(24 hours)
+        """
+        dilation1 = 1  # 3 hours
+
+        """
+        define the first tcn layer, dilation=1
+        """
+        inputs = layers.Input((self.time_sequence,self.feature_num))
+        tcn_conv1 = tf.keras.layers.Conv1D(self.latent_dim, self.tcn_filter_size, activation='relu',
+                                           dilation_rate=dilation1, padding='valid')
+        conv1_identity = tf.keras.layers.Conv1D(self.latent_dim, 1, activation='relu', dilation_rate=1)
+        layernorm1 = tf.keras.layers.BatchNormalization()
+        padding_1 = (self.tcn_filter_size - 1) * dilation1
+        # inputs1 = tf.pad(inputs, tf.constant([[0,0],[1,0],[0,0]]) * padding_1)
+
+        inputs1 = tf.pad(inputs, tf.constant([[0, 0], [1, 0], [0, 0]]) * padding_1)
+        self.outputs1_first_lvl = tcn_conv1(inputs1)
+        #self.outputs1 = conv1_identity(self.outputs1)
+        # self.outputs1 = layernorm1(self.outputs1)
+
+
+        return tf.keras.Model(inputs,
+                              [inputs, self.outputs1_first_lvl],
+                              name='tcn_encoder_first_lvl')
+
     def lstm_split_multi(self):
         inputs = layers.Input((self.time_sequence, self.latent_dim))
         inputs2 = layers.Input((self.time_sequence, self.latent_dim))
@@ -658,6 +671,22 @@ class protatype_ehr():
         return tf.keras.Model([inputs, inputs2, inputs3, inputs4],
                               [output_query1, output2, output3, output4, output5], name='lstm_split')
 
+    def translation_layer(self):
+        model = tf.keras.Sequential(
+            [
+                # Note the AutoEncoder-like structure.
+                layers.Input((self.latent_dim)),
+                # layers.Input((50)),
+                layers.Dense(
+                    self.latent_dim,
+                    # use_bias=False,
+                    kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+                    activation='relu'
+                )
+            ],
+            name="translation_layer",
+        )
+        return model
 
     def position_project_layer(self):
         model = tf.keras.Sequential(
@@ -684,7 +713,7 @@ class protatype_ehr():
                 # layers.Input((50)),
                 layers.Dense(
                     self.latent_dim,
-                    # use_bias=False,
+                    use_bias=True,
                     kernel_initializer=tf.keras.initializers.he_normal(seed=None),
                     activation='relu'
                 )
@@ -692,6 +721,8 @@ class protatype_ehr():
             name="transition_projection",
         )
         return model
+
+
 
     def train_standard(self):
         # input = layers.Input((self.time_sequence, self.feature_num))
@@ -752,7 +783,6 @@ class protatype_ehr():
     def train_cl(self):
         # input = layers.Input((self.time_sequence, self.feature_num))
         self.tcn = self.tcn_encoder_second_last_level()
-        self.translation = self.trainslation_model()
         # tcn = self.tcn(input)
         self.auc_all = []
         self.loss_track = []
@@ -896,28 +926,38 @@ class protatype_ehr():
                                                                       on_site_extract_array_cohort,
                                                                       on_site_extract_array_control, y_batch_train)
                     #if epoch < 2:
-                    loss = cl_loss+progression_loss+cl_loss_temporal+mse_loss
-                    #else:
-                       # loss = progression_loss
+                    #if epoch == 0 or epoch % 2 == 0:
+                     #   loss = cl_loss#+progression_loss+cl_loss_temporal+mse_loss
+
+                    #if epoch % 2 == 1:
+                    loss = cl_loss + cl_loss_temporal
+
+                #if epoch == 0 or epoch % 2 == 0:
                 gradients = \
                     tape.gradient(loss,
-                                  self.tcn.trainable_variables+self.transition_layer.trainable_variables
-                                  +self.deconv.trainable_variables)
+                                  self.tcn.trainable_variables+self.transition_layer.trainable_variables)
+                                  #+self.deconv.trainable_variables)
                 optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
                 optimizer.apply_gradients(zip(gradients,
-                                              self.tcn.trainable_variables+self.transition_layer.trainable_variables
-                                              +self.deconv.trainable_variables))
+                                              self.tcn.trainable_variables+self.transition_layer.trainable_variables))
+                #if epoch % 2 == 1:
+                 #   gradients = \
+                  #      tape.gradient(loss, self.transition_layer.trainable_variables)
+                   # optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
+
+                    #optimizer.apply_gradients(zip(gradients, self.transition_layer.trainable_variables))
 
                 if step % 20 == 0:
+                    #if epoch == 0 or epoch % 2 == 0:
                     print("Training cl_loss(for one batch) at step %d: %.4f"
                           % (step, float(cl_loss)))
                     print("Training cl_loss_temporal(for one batch) at step %d: %.4f"
                           % (step, float(cl_loss_temporal)))
                     print("Training progression_loss(for one batch) at step %d: %.4f"
                           % (step, float(progression_loss)))
-                    print("Training mse_loss(for one batch) at step %d: %.4f"
-                          % (step, float(mse_loss)))
+                    #print("Training mse_loss(for one batch) at step %d: %.4f"
+                          #% (step, float(mse_loss)))
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
 
                     self.loss_track.append(loss)
