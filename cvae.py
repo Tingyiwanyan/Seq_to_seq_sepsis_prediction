@@ -852,7 +852,7 @@ class protatype_ehr():
                     tcn_temporal_output = self.tcn(x_batch_train)
                     tcn_temporal_output_cohort = self.tcn(x_batch_train_cohort)
                     tcn_temporal_output_control = self.tcn(x_batch_train_control)
-                    translation_vector =
+                    #translation_vector =
                     self.check_output = tcn_temporal_output
                     last_layer_output = tcn_temporal_output[1]
                     out_put_1h_resolution = tcn_temporal_output[4]
