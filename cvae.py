@@ -783,11 +783,13 @@ class protatype_ehr():
     def train_cl(self):
         # input = layers.Input((self.time_sequence, self.feature_num))
         self.tcn = self.tcn_encoder_second_last_level()
+        self.tcn_first = self.tcn_first_level()
         # tcn = self.tcn(input)
         self.auc_all = []
         self.loss_track = []
         self.projection_layer = self.project_logit()
         self.transition_layer = self.transition_project_layer()
+        self.translation = self.translation_layer()
         self.mseloss = tf.keras.losses.MeanSquaredError()
         self.deconv = self.first_lvl_resolution_deconv()
         # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
@@ -835,6 +837,7 @@ class protatype_ehr():
                 self.check_x_batch = x_batch_train
                 self.check_on_site_time = on_site_time
                 self.check_label = y_batch_train
+                identity_input_translation = np.zeros((x_batch_train.shape[0],self.latent_dim))
 
                 random_indices_cohort = np.random.choice(self.num_cohort, size=x_batch_train.shape[0], replace=False)
                 random_indices_control = np.random.choice(self.num_control, size=x_batch_train.shape[0], replace=False)
@@ -849,6 +852,7 @@ class protatype_ehr():
                     tcn_temporal_output = self.tcn(x_batch_train)
                     tcn_temporal_output_cohort = self.tcn(x_batch_train_cohort)
                     tcn_temporal_output_control = self.tcn(x_batch_train_control)
+                    translation_vector =
                     self.check_output = tcn_temporal_output
                     last_layer_output = tcn_temporal_output[1]
                     out_put_1h_resolution = tcn_temporal_output[4]
