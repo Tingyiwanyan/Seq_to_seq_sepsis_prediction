@@ -9,11 +9,11 @@ class load_embeddings():
         self.load_embedding()
 
     def load_embedding(self):
-        with open('on_site_embedding4.npy', 'rb') as f:
+        with open('on_site_embedding2.npy', 'rb') as f:
             self.on_site_embedding = np.load(f)
-        with open('on_site_logit4.npy', 'rb') as f:
+        with open('on_site_logit2.npy', 'rb') as f:
             self.on_site_logit = np.load(f)
-        with open('temporal_semantic_embedding4.npy', 'rb') as f:
+        with open('temporal_semantic_embedding2.npy', 'rb') as f:
             self.temporal_semantic_embedding = np.load(f)
 
 

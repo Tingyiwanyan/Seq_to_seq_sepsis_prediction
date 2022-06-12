@@ -852,6 +852,9 @@ class protatype_ehr():
                     tcn_temporal_output = self.tcn(x_batch_train)
                     tcn_temporal_output_cohort = self.tcn(x_batch_train_cohort)
                     tcn_temporal_output_control = self.tcn(x_batch_train_control)
+                    tcn_temporal_output_first = self.tcn_first(x_batch_train)[1]
+                    tcn_temporal_output_first_cohort = self.tcn_first(x_batch_train_cohort)[1]
+                    tcn_temporal_output_first_control = self.tcn_first(x_batch_train_control)[1]
                     #translation_vector =
                     self.check_output = tcn_temporal_output
                     last_layer_output = tcn_temporal_output[1]
@@ -873,14 +876,14 @@ class protatype_ehr():
                     on_site_extract_array_control = tf.stack(on_site_extract_control)
 
                     temporal_semantic, sample_sequence_batch, temporal_semantic_origin = \
-                        self.extract_temporal_semantic(out_put_1h_resolution, on_site_time, x_batch_train)
+                        self.extract_temporal_semantic(tcn_temporal_output_first, on_site_time, x_batch_train)
 
                     temporal_semantic_cohort, sample_sequence_batch_cohort, temporal_semantic_origin_cohort = \
-                        self.extract_temporal_semantic(out_put_1h_resolution_cohort,
+                        self.extract_temporal_semantic(tcn_temporal_output_cohort,
                                                        on_site_time_cohort, x_batch_train_cohort)
 
                     temporal_semantic_control, sample_sequence_batch_control, temporal_semantic_origin_control = \
-                        self.extract_temporal_semantic(out_put_1h_resolution_control,
+                        self.extract_temporal_semantic(tcn_temporal_output_control,
                                                        on_site_time_control, x_batch_train_control)
 
                     temporal_semantic = tf.squeeze(temporal_semantic)
