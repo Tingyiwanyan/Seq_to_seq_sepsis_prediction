@@ -944,7 +944,7 @@ class protatype_ehr():
                     optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
                     optimizer.apply_gradients(zip(gradients,
-                                                  self.tcn.trainable_variables)#+self.transition_layer.trainable_variables))
+                                                  self.tcn.trainable_variables))#+self.transition_layer.trainable_variables))
                 if epoch % 2 == 1:
                     gradients = \
                         tape.gradient(loss, self.transition_layer.trainable_variables)
