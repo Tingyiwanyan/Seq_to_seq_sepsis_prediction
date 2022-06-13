@@ -114,8 +114,8 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
-        #file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
+        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -852,7 +852,14 @@ class protatype_ehr():
                     tcn_temporal_output = self.tcn(x_batch_train)
                     tcn_temporal_output_cohort = self.tcn(x_batch_train_cohort)
                     tcn_temporal_output_control = self.tcn(x_batch_train_control)
+<<<<<<< HEAD
                     #translation_vector = self.translation(identity_input_translation)
+=======
+                    tcn_temporal_output_first = self.tcn_first(x_batch_train)[1]
+                    tcn_temporal_output_first_cohort = self.tcn_first(x_batch_train_cohort)[1]
+                    tcn_temporal_output_first_control = self.tcn_first(x_batch_train_control)[1]
+                    #translation_vector =
+>>>>>>> 53d63d4c07e665bef5e263e268905ad00837de99
                     self.check_output = tcn_temporal_output
                     last_layer_output = tcn_temporal_output[1]
                     out_put_1h_resolution = tcn_temporal_output[4]
@@ -873,14 +880,14 @@ class protatype_ehr():
                     on_site_extract_array_control = tf.stack(on_site_extract_control)
 
                     temporal_semantic, sample_sequence_batch, temporal_semantic_origin = \
-                        self.extract_temporal_semantic(out_put_1h_resolution, on_site_time, x_batch_train)
+                        self.extract_temporal_semantic(tcn_temporal_output_first, on_site_time, x_batch_train)
 
                     temporal_semantic_cohort, sample_sequence_batch_cohort, temporal_semantic_origin_cohort = \
-                        self.extract_temporal_semantic(out_put_1h_resolution_cohort,
+                        self.extract_temporal_semantic(tcn_temporal_output_first_cohort,
                                                        on_site_time_cohort, x_batch_train_cohort)
 
                     temporal_semantic_control, sample_sequence_batch_control, temporal_semantic_origin_control = \
-                        self.extract_temporal_semantic(out_put_1h_resolution_control,
+                        self.extract_temporal_semantic(tcn_temporal_output_first_control,
                                                        on_site_time_control, x_batch_train_control)
 
                     temporal_semantic = tf.squeeze(temporal_semantic)
@@ -931,20 +938,20 @@ class protatype_ehr():
                                                                       on_site_extract_array_control, y_batch_train)
                     #if epoch < 2:
                     #if epoch == 0 or epoch % 2 == 0:
-                     #   loss = cl_loss#+progression_loss+cl_loss_temporal+mse_loss
+                    loss = cl_loss_temporal#+mse_loss
 
                     #if epoch % 2 == 1:
-                    loss = cl_loss + cl_loss_temporal
+                        #loss =progression_loss
 
                 #if epoch == 0 or epoch % 2 == 0:
                 gradients = \
                     tape.gradient(loss,
-                                  self.tcn.trainable_variables+self.transition_layer.trainable_variables)
+                                  self.tcn_first.trainable_variables+self.transition_layer.trainable_variables)
                                   #+self.deconv.trainable_variables)
                 optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
                 optimizer.apply_gradients(zip(gradients,
-                                              self.tcn.trainable_variables+self.transition_layer.trainable_variables))
+                                              self.tcn_first.trainable_variables+self.transition_layer.trainable_variables))
                 #if epoch % 2 == 1:
                  #   gradients = \
                   #      tape.gradient(loss, self.transition_layer.trainable_variables)
