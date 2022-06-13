@@ -158,7 +158,7 @@ class protatype_ehr():
 
     def compute_positive_pair(self, z,  global_pull_cohort, global_pull_control, label):
         z = tf.math.l2_normalize(z, axis=-1)
-        z = tf.cast(z,tf.float32)
+        #z = tf.cast(z,tf.float32)
         global_pull_cohort = tf.math.l2_normalize(global_pull_cohort, axis=-1)
         global_pull_control = tf.math.l2_normalize(global_pull_control, axis=-1)
         #self.check_global_pull_cohort = global_pull_cohort
@@ -207,7 +207,7 @@ class protatype_ehr():
 
         #neg_train_cohort = np.array([global_pull_cohort[i, :] for i in random_indices_cohort])
         #neg_train_control = np.array([global_pull_control[i, :] for i in random_indices_control])
-        z = tf.cast(z,tf.float32)
+        #z = tf.cast(z,tf.float32)
 
         similarity_matrix_cohort = tf.matmul(z, tf.transpose(global_pull_cohort))
         similarity_matrix_control = tf.matmul(z, tf.transpose(global_pull_control))
@@ -842,12 +842,11 @@ class protatype_ehr():
                     temporal_semantic_origin = tf.squeeze(temporal_semantic_origin)
 
                     self.check_temporal_semantic = temporal_semantic
-                    self.check_on_site_extract = on_site_extract_array
-                    self.check_temporal_semantic_origin = temporal_semantic_origin
+                    self.check_temporal_semantic_cohort = temporal_semantic_cohort
 
-
-                    temporal_semantic_reconstruct = tf.cast(temporal_semantic_reconstruct,tf.float32)
-                    temporal_semantic_origin = tf.cast(temporal_semantic_origin,tf.float32)
+                    temporal_semantic_reconstruct = tf.cast(temporal_semantic_reconstruct,tf.float64)
+                    temporal_semantic_origin = tf.cast(temporal_semantic_origin,tf.float64)
+                    #temporal_semantic = tf.cast(temporal_semantic,tf.float32)
 
                     mse_loss = self.mseloss(temporal_semantic_reconstruct,temporal_semantic_origin)
 
@@ -857,7 +856,7 @@ class protatype_ehr():
 
                     #if epoch < 2:
                     #if epoch == 0 or epoch % 2 == 0:
-                    loss = cl_loss_temporal#+mse_loss
+                    loss = cl_loss_temporal+mse_loss
 
                     #if epoch % 2 == 1:
                         #loss =progression_loss
@@ -882,8 +881,8 @@ class protatype_ehr():
                     #if epoch == 0 or epoch % 2 == 0:
                     print("Training cl_loss_temporal(for one batch) at step %d: %.4f"
                           % (step, float(cl_loss_temporal)))
-                    #print("Training mse_loss(for one batch) at step %d: %.4f"
-                          #% (step, float(mse_loss)))
+                    print("Training mse_loss(for one batch) at step %d: %.4f"
+                          % (step, float(mse_loss)))
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
 
                     self.loss_track.append(loss)
@@ -1080,6 +1079,22 @@ class protatype_ehr():
 
                     self.loss_track.append(loss)
 
+    def reconstruct_signal_first_lvl(self):
+        temporal_cohort_1_lvl_resolution = self.tcn_first(self.memory_bank_cohort)
+        temporal_control_1_lvl_resolution = self.tcn_first(self.memory_bank_control)
+
+        self.temporal_semantic_cohort, sample_sequence_batch_cohort, temporal_semantic_origin_cohort = \
+            self.extract_temporal_semantic(temporal_cohort_1_lvl_resolution,
+                                           on_site_time_cohort, self.memory_bank_cohort)
+
+        self.temporal_semantic_control, sample_sequence_batch_control, temporal_semantic_origin_control = \
+            self.extract_temporal_semantic(temporal_control_1_lvl_resolution,
+                                           on_site_time_control, self.memory_bank_control)
+
+        self.temporal_semantic_cohort = tf.math.l2_normalize(tf.squeeze(self.temporal_semantic_cohort),axis=-1)
+        self.temporal_semantic_control = tf.math.l2_normalize(tf.squeeze(self.temporal_semantic_control),axis=-1)
+
+
     def reconstruct_signal(self):
         temporal_cohort_on_site_ = self.tcn(self.memory_bank_cohort)[1]
         temporal_cohort_1_lvl_resolution = self.tcn(self.memory_bank_cohort)[4]
@@ -1171,7 +1186,7 @@ class protatype_ehr():
             np.save(f,self.train_logit)
 
         with open('temporal_semantic_embedding'+id+'.npy','wb') as f:
-            np.save(f,temporal_semantic_whole_transit)
+            np.save(f,temporal_semantic_whole)
 
     def save_embedding(self,id):
         train = self.tcn(self.train_data)[1]
