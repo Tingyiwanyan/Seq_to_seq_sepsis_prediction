@@ -541,8 +541,8 @@ class protatype_ehr():
                     # use_bias=False,
                     kernel_initializer=tf.keras.initializers.he_normal(seed=None),
                     activation='relu'
-                )
-                layers.Conv1DTranspose(self.feature_num, self.tcn_filter_size),
+                ),
+                layers.Conv1DTranspose(self.feature_num, self.tcn_filter_size)
                 # layers.Input((50)),
             ],
             name="deconv_layer",
