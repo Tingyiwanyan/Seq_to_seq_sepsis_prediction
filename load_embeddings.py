@@ -1,5 +1,6 @@
 from sklearn.metrics import roc_auc_score
 from sklearn.manifold import TSNE
+import umap
 import matplotlib.pyplot as plt
 import numpy as np
 import random
@@ -9,11 +10,19 @@ class load_embeddings():
         self.load_embedding()
 
     def load_embedding(self):
+<<<<<<< HEAD
         with open('on_site_embedding1.npy', 'rb') as f:
             self.on_site_embedding = np.load(f)
         with open('on_site_logit1.npy', 'rb') as f:
             self.on_site_logit = np.load(f)
         with open('temporal_semantic_embedding1.npy', 'rb') as f:
+=======
+        with open('on_site_embedding5.npy', 'rb') as f:
+            self.on_site_embedding = np.load(f)
+        with open('on_site_logit5.npy', 'rb') as f:
+            self.on_site_logit = np.load(f)
+        with open('temporal_semantic_embedding5.npy', 'rb') as f:
+>>>>>>> 4902d877d09fb1d069c00dda7f8dc8a1ad4c1c37
             self.temporal_semantic_embedding = np.load(f)
 
 
@@ -25,11 +34,11 @@ class load_embeddings():
             if self.on_site_logit[i] == 1:
                 plt.plot(CL_k[i][0], CL_k[i][1], 'o', color='red', markersize=5)
 
-        plt.show()
+        #plt.show()
 
 
     def vis_embedding_tsl_load(self):
-        CL_k = TSNE(n_components=2).fit_transform(self.temporal_semantic_embedding[0:5000, :])
+        CL_k = umap.UMAP().fit_transform(self.temporal_semantic_embedding[0:5000, :])
 
         for i in range(5000):
             if self.on_site_logit[i] == 0:
@@ -52,7 +61,7 @@ class load_embeddings():
                 plt.plot(CL_k_on_site[i][0], CL_k_on_site[i][1], 'o', color='green', markersize=5)
 
 
-        plt.show()
+       # plt.show()
 
 if __name__ == "__main__":
     l = load_embeddings()

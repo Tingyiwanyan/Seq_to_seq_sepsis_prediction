@@ -114,8 +114,8 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
-        file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
+        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        #file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -158,7 +158,7 @@ class protatype_ehr():
 
     def compute_positive_pair(self, z,  global_pull_cohort, global_pull_control, label):
         z = tf.math.l2_normalize(z, axis=-1)
-        z = tf.cast(z,tf.float32)
+        #z = tf.cast(z,tf.float32)
         global_pull_cohort = tf.math.l2_normalize(global_pull_cohort, axis=-1)
         global_pull_control = tf.math.l2_normalize(global_pull_control, axis=-1)
         #self.check_global_pull_cohort = global_pull_cohort
@@ -207,7 +207,7 @@ class protatype_ehr():
 
         #neg_train_cohort = np.array([global_pull_cohort[i, :] for i in random_indices_cohort])
         #neg_train_control = np.array([global_pull_control[i, :] for i in random_indices_control])
-        z = tf.cast(z,tf.float32)
+        #z = tf.cast(z,tf.float32)
 
         similarity_matrix_cohort = tf.matmul(z, tf.transpose(global_pull_cohort))
         similarity_matrix_control = tf.matmul(z, tf.transpose(global_pull_control))
@@ -646,7 +646,7 @@ class protatype_ehr():
 
         inputs1 = tf.pad(inputs, tf.constant([[0, 0], [1, 0], [0, 0]]) * padding_1)
         self.outputs1_first_lvl = tcn_conv1(inputs1)
-        #self.outputs1 = conv1_identity(self.outputs1)
+        self.outputs1_first_lvl = conv1_identity(self.outputs1_first_lvl)
         # self.outputs1 = layernorm1(self.outputs1)
 
 
@@ -779,6 +779,114 @@ class protatype_ehr():
 
                     self.loss_track.append(loss)
 
+    def train_cl_first_lvl(self):
+        self.tcn_first = self.tcn_first_level()
+        # tcn = self.tcn(input)
+        self.auc_all = []
+        self.loss_track = []
+        self.projection_layer = self.project_logit()
+        self.transition_layer = self.transition_project_layer()
+        self.translation = self.translation_layer()
+        self.mseloss = tf.keras.losses.MeanSquaredError()
+        self.deconv = self.first_lvl_resolution_deconv()
+        # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
+
+        for epoch in range(self.pre_train_epoch):
+            input_translation = np.ones(self.latent_dim)
+            # if epoch > 1:
+            self.save_embedding_first_lvl(str(epoch))
+            print("\nStart of epoch %d" % (epoch,))
+
+
+            for step, (x_batch_train, y_batch_train, on_site_time, semantic_origin) in enumerate(self.train_dataset):
+                self.check_x_batch = x_batch_train
+                self.check_on_site_time = on_site_time
+                self.check_label = y_batch_train
+
+                random_indices_cohort = np.random.choice(self.num_cohort, size=x_batch_train.shape[0], replace=False)
+                random_indices_control = np.random.choice(self.num_control, size=x_batch_train.shape[0], replace=False)
+
+                x_batch_train_cohort = self.memory_bank_cohort[random_indices_cohort, :, :]
+                x_batch_train_control = self.memory_bank_control[random_indices_control, :, :]
+                on_site_time_cohort = self.memory_bank_cohort_on_site[random_indices_cohort]
+                on_site_time_control = self.memory_bank_control_on_site[random_indices_control]
+
+                with tf.GradientTape() as tape:
+                    tcn_temporal_output_first = self.tcn_first(x_batch_train)[1]
+                    tcn_temporal_output_first_cohort = self.tcn_first(x_batch_train_cohort)[1]
+                    tcn_temporal_output_first_control = self.tcn_first(x_batch_train_control)[1]
+                    #translation_vector =
+
+
+                    temporal_semantic, sample_sequence_batch, temporal_semantic_origin = \
+                        self.extract_temporal_semantic(tcn_temporal_output_first, on_site_time, x_batch_train)
+
+                    temporal_semantic_cohort, sample_sequence_batch_cohort, temporal_semantic_origin_cohort = \
+                        self.extract_temporal_semantic(tcn_temporal_output_first_cohort,
+                                                       on_site_time_cohort, x_batch_train_cohort)
+
+                    temporal_semantic_control, sample_sequence_batch_control, temporal_semantic_origin_control = \
+                        self.extract_temporal_semantic(tcn_temporal_output_first_control,
+                                                       on_site_time_control, x_batch_train_control)
+
+                    temporal_semantic = tf.squeeze(temporal_semantic)
+                    temporal_semantic_cohort = tf.squeeze(temporal_semantic_cohort)
+                    temporal_semantic_control = tf.squeeze(temporal_semantic_control)
+
+                    temporal_semantic = tf.math.l2_normalize(temporal_semantic,axis=-1)
+                    temporal_semantic_cohort = tf.math.l2_normalize(temporal_semantic_cohort,axis=-1)
+                    temporal_semantic_control = tf.math.l2_normalize(temporal_semantic_control,axis=-1)
+
+                    temporal_semantic_ = tf.expand_dims(temporal_semantic,1)
+                    temporal_semantic_reconstruct = self.deconv(temporal_semantic_)
+                    temporal_semantic_origin = tf.squeeze(temporal_semantic_origin)
+
+                    self.check_temporal_semantic = temporal_semantic
+                    self.check_temporal_semantic_cohort = temporal_semantic_cohort
+
+                    temporal_semantic_reconstruct = tf.cast(temporal_semantic_reconstruct,tf.float64)
+                    temporal_semantic_origin = tf.cast(temporal_semantic_origin,tf.float64)
+                    #temporal_semantic = tf.cast(temporal_semantic,tf.float32)
+
+                    mse_loss = self.mseloss(temporal_semantic_reconstruct,temporal_semantic_origin)
+
+
+                    cl_loss_temporal = self.info_nce_loss(temporal_semantic,temporal_semantic_cohort,
+                                                          temporal_semantic_control, y_batch_train)
+
+                    #if epoch < 2:
+                    #if epoch == 0 or epoch % 2 == 0:
+                    loss = cl_loss_temporal+mse_loss
+
+                    #if epoch % 2 == 1:
+                        #loss =progression_loss
+
+                #if epoch == 0 or epoch % 2 == 0:
+                gradients = \
+                    tape.gradient(loss,
+                                  self.tcn_first.trainable_variables+self.deconv.trainable_variables)
+                                  #+self.deconv.trainable_variables)
+                optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
+
+                optimizer.apply_gradients(zip(gradients,
+                                              self.tcn_first.trainable_variables+self.deconv.trainable_variables))
+                #if epoch % 2 == 1:
+                 #   gradients = \
+                  #      tape.gradient(loss, self.transition_layer.trainable_variables)
+                   # optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
+
+                    #optimizer.apply_gradients(zip(gradients, self.transition_layer.trainable_variables))
+
+                if step % 20 == 0:
+                    #if epoch == 0 or epoch % 2 == 0:
+                    print("Training cl_loss_temporal(for one batch) at step %d: %.4f"
+                          % (step, float(cl_loss_temporal)))
+                    print("Training mse_loss(for one batch) at step %d: %.4f"
+                          % (step, float(mse_loss)))
+                    print("seen so far: %s samples" % ((step + 1) * self.batch_size))
+
+                    self.loss_track.append(loss)
+
 
     def train_cl(self):
         # input = layers.Input((self.time_sequence, self.feature_num))
@@ -852,10 +960,12 @@ class protatype_ehr():
                     tcn_temporal_output = self.tcn(x_batch_train)
                     tcn_temporal_output_cohort = self.tcn(x_batch_train_cohort)
                     tcn_temporal_output_control = self.tcn(x_batch_train_control)
+                    #translation_vector = self.translation(identity_input_translation)
                     tcn_temporal_output_first = self.tcn_first(x_batch_train)[1]
                     tcn_temporal_output_first_cohort = self.tcn_first(x_batch_train_cohort)[1]
                     tcn_temporal_output_first_control = self.tcn_first(x_batch_train_control)[1]
                     #translation_vector =
+
                     self.check_output = tcn_temporal_output
                     last_layer_output = tcn_temporal_output[1]
                     out_put_1h_resolution = tcn_temporal_output[4]
@@ -969,6 +1079,24 @@ class protatype_ehr():
 
                     self.loss_track.append(loss)
 
+    def reconstruct_signal_first_lvl(self):
+        temporal_cohort_1_lvl_resolution = self.tcn_first(self.memory_bank_cohort)[1]
+        temporal_control_1_lvl_resolution = self.tcn_first(self.memory_bank_control)[1]
+        on_site_time_cohort = self.memory_bank_cohort_on_site
+        on_site_time_control = self.memory_bank_control_on_site
+
+        self.temporal_semantic_cohort, sample_sequence_batch_cohort, temporal_semantic_origin_cohort = \
+            self.extract_temporal_semantic(temporal_cohort_1_lvl_resolution,
+                                           on_site_time_cohort, self.memory_bank_cohort)
+
+        self.temporal_semantic_control, sample_sequence_batch_control, temporal_semantic_origin_control = \
+            self.extract_temporal_semantic(temporal_control_1_lvl_resolution,
+                                           on_site_time_control, self.memory_bank_control)
+
+        self.temporal_semantic_cohort = tf.math.l2_normalize(tf.squeeze(self.temporal_semantic_cohort),axis=-1)
+        self.temporal_semantic_control = tf.math.l2_normalize(tf.squeeze(self.temporal_semantic_control),axis=-1)
+
+
     def reconstruct_signal(self):
         temporal_cohort_on_site_ = self.tcn(self.memory_bank_cohort)[1]
         temporal_cohort_1_lvl_resolution = self.tcn(self.memory_bank_cohort)[4]
@@ -1036,6 +1164,31 @@ class protatype_ehr():
                 plt.plot(CL_k[i][0], CL_k[i][1], 'o', color='red', markersize=5)
 
         plt.show()
+
+    def save_embedding_first_lvl(self,id):
+        output_1h_resolution_whole = self.tcn_first(self.train_data)[1]
+        #train_embedding = [train[i, np.abs(int(self.train_on_site_time[i] - 1)), :] for i in
+                           #range(self.train_on_site_time.shape[0])]
+
+        #output_1h_resolution_whole = self.tcn(self.train_data)[4]
+        temporal_semantic_whole, sample_sequence_batch_whole, temporal_semantic_origin_whole = \
+            self.extract_temporal_semantic(output_1h_resolution_whole, self.train_on_site_time, self.train_data)
+
+        temporal_semantic_whole = tf.squeeze(temporal_semantic_whole)
+        #temporal_semantic_whole_transit = self.transition_layer(temporal_semantic_whole)
+        self.check_vis_temporal = tf.squeeze(temporal_semantic_whole)
+
+        #train_embedding = np.array(train_embedding)
+        #self.train_embedding = train_embedding
+
+       # with open('on_site_embedding'+id+'.npy', 'wb') as f:
+            #np.save(f, train_embedding)
+
+        with open('on_site_logit'+id+'.npy','wb') as f:
+            np.save(f,self.train_logit)
+
+        with open('temporal_semantic_embedding'+id+'.npy','wb') as f:
+            np.save(f,temporal_semantic_whole)
 
     def save_embedding(self,id):
         train = self.tcn(self.train_data)[1]
