@@ -829,6 +829,11 @@ class protatype_ehr():
                         self.extract_temporal_semantic(tcn_temporal_output_first_control,
                                                        on_site_time_control, x_batch_train_control)
 
+                    y_batch_train = tf.expand_dims(y_batch_train,axis=1)
+                    y_batch_train = tf.broadcast_to(y_batch_train,
+                                               shape=(temporal_semantic.shape[0],
+                                                      temporal_semantic.shape[1]))
+                    y_batch_train = tf.reshape(y_batch_train,(y_batch_train.shape[0]*y_batch_train.shape[1]))
                     #temporal_semantic = tf.squeeze(temporal_semantic)
                     temporal_semantic = tf.reshape(temporal_semantic,
                                                    (temporal_semantic.shape[0]*temporal_semantic.shape[1],
