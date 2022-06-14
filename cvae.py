@@ -851,9 +851,9 @@ class protatype_ehr():
                     temporal_semantic_cohort_transit = self.transition_layer(temporal_semantic_cohort)
                     temporal_semantic_control_transit = self.transition_layer(temporal_semantic_control)
 
-                    temporal_semantic = tf.math.l2_normalize(temporal_semantic_transit,axis=-1)
-                    temporal_semantic_cohort = tf.math.l2_normalize(temporal_semantic_cohort_transit,axis=-1)
-                    temporal_semantic_control = tf.math.l2_normalize(temporal_semantic_control_transit,axis=-1)
+                    temporal_semantic = tf.cast(tf.math.l2_normalize(temporal_semantic_transit,axis=-1),tf.float64)
+                    temporal_semantic_cohort = tf.cast(tf.math.l2_normalize(temporal_semantic_cohort_transit,axis=-1),tf.float64)
+                    temporal_semantic_control = tf.cast(tf.math.l2_normalize(temporal_semantic_control_transit,axis=-1),tf.float64)
 
                     temporal_semantic_ = tf.expand_dims(temporal_semantic,1)
                     temporal_semantic_reconstruct = self.deconv(temporal_semantic_)
