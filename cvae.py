@@ -864,12 +864,12 @@ class protatype_ehr():
                 #if epoch == 0 or epoch % 2 == 0:
                 gradients = \
                     tape.gradient(loss,
-                                  self.tcn_first.trainable_variables)
+                                  self.tcn_first.trainable_variables+self.deconv.trainable_variables)
                                   #+self.deconv.trainable_variables)
                 optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
                 optimizer.apply_gradients(zip(gradients,
-                                              self.tcn_first.trainable_variables))
+                                              self.tcn_first.trainable_variables+self.deconv.trainable_variables))
                 #if epoch % 2 == 1:
                  #   gradients = \
                   #      tape.gradient(loss, self.transition_layer.trainable_variables)
@@ -1080,8 +1080,10 @@ class protatype_ehr():
                     self.loss_track.append(loss)
 
     def reconstruct_signal_first_lvl(self):
-        temporal_cohort_1_lvl_resolution = self.tcn_first(self.memory_bank_cohort)
-        temporal_control_1_lvl_resolution = self.tcn_first(self.memory_bank_control)
+        temporal_cohort_1_lvl_resolution = self.tcn_first(self.memory_bank_cohort)[1]
+        temporal_control_1_lvl_resolution = self.tcn_first(self.memory_bank_control)[1]
+        on_site_time_cohort = self.memory_bank_cohort_on_site
+        on_site_time_control = self.memory_bank_control_on_site
 
         self.temporal_semantic_cohort, sample_sequence_batch_cohort, temporal_semantic_origin_cohort = \
             self.extract_temporal_semantic(temporal_cohort_1_lvl_resolution,
