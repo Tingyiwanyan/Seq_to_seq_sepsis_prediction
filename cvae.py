@@ -847,9 +847,13 @@ class protatype_ehr():
                                                    (temporal_semantic_control.shape[0] * temporal_semantic_control.shape[1],
                                                     temporal_semantic_control.shape[2]))
 
-                    temporal_semantic = tf.math.l2_normalize(temporal_semantic,axis=-1)
-                    temporal_semantic_cohort = tf.math.l2_normalize(temporal_semantic_cohort,axis=-1)
-                    temporal_semantic_control = tf.math.l2_normalize(temporal_semantic_control,axis=-1)
+                    temporal_semantic_transit = self.transition_layer(temporal_semantic)
+                    temporal_semantic_cohort_transit = self.transition_layer(temporal_semantic_cohort)
+                    temporal_semantic_control_transit = self.transition_layer(temporal_semantic_control)
+
+                    temporal_semantic = tf.math.l2_normalize(temporal_semantic_transit,axis=-1)
+                    temporal_semantic_cohort = tf.math.l2_normalize(temporal_semantic_cohort_transit,axis=-1)
+                    temporal_semantic_control = tf.math.l2_normalize(temporal_semantic_control_transit,axis=-1)
 
                     temporal_semantic_ = tf.expand_dims(temporal_semantic,1)
                     temporal_semantic_reconstruct = self.deconv(temporal_semantic_)
@@ -885,12 +889,14 @@ class protatype_ehr():
                 #if epoch == 0 or epoch % 2 == 0:
                 gradients = \
                     tape.gradient(loss,
-                                  self.tcn_first.trainable_variables+self.deconv.trainable_variables)
+                                  self.tcn_first.trainable_variables+self.deconv.trainable_variables
+                                  +self.transition_layer.trainable_variables)
                                   #+self.deconv.trainable_variables)
                 optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
                 optimizer.apply_gradients(zip(gradients,
-                                              self.tcn_first.trainable_variables+self.deconv.trainable_variables))
+                                              self.tcn_first.trainable_variables+self.deconv.trainable_variables
+                                              +self.transition_layer.trainable_variables))
                 #if epoch % 2 == 1:
                  #   gradients = \
                   #      tape.gradient(loss, self.transition_layer.trainable_variables)
