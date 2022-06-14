@@ -524,13 +524,30 @@ class protatype_ehr():
         return projection_regular_loss
 
     def first_lvl_resolution_deconv(self):
-        inputs = layers.Input((1, self.latent_dim))
+        #inputs = layers.Input((1, self.latent_dim))
 
-        tcn_deconv1 = tf.keras.layers.Conv1DTranspose(self.feature_num, self.tcn_filter_size)
+        #tcn_deconv1 = tf.keras.layers.Conv1DTranspose(self.feature_num, self.tcn_filter_size)
 
-        output = tcn_deconv1(inputs)
+        #output = tcn_deconv1(inputs)
 
-        return tf.keras.Model(inputs, output, name='tcn_deconv1')
+        #return tf.keras.Model(inputs, output, name='tcn_deconv1')
+
+        model = tf.keras.Sequential(
+            [
+                # Note the AutoEncoder-like structure.
+                layers.Input((1, self.latent_dim)),
+                layers.Dense(
+                    self.latent_dim,
+                    # use_bias=False,
+                    kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+                    activation='relu'
+                )
+                layers.Conv1DTranspose(self.feature_num, self.tcn_filter_size),
+                # layers.Input((50)),
+            ],
+            name="deconv_layer",
+        )
+        return model
 
     def one_h_resolution_deconv(self):
         inputs = layers.Input((1, self.latent_dim))
