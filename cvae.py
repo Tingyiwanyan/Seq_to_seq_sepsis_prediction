@@ -853,7 +853,8 @@ class protatype_ehr():
                     temporal_semantic_origin = tf.reshape(temporal_semantic_origin,
                                                           (temporal_semantic_origin.shape[0]*
                                                            temporal_semantic_origin.shape[1],
-                                                           temporal_semantic_origin.shape[2]))
+                                                           temporal_semantic_origin.shape[2],
+                                                           temporal_semantic_origin.shape[3]))
 
                     self.check_temporal_semantic = temporal_semantic
                     self.check_temporal_semantic_cohort = temporal_semantic_cohort
