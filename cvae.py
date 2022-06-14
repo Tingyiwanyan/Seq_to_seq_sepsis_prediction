@@ -848,6 +848,7 @@ class protatype_ehr():
 
                     temporal_semantic_ = tf.expand_dims(temporal_semantic,1)
                     temporal_semantic_reconstruct = self.deconv(temporal_semantic_)
+                    self.check_temporal_semantic_origin_ = temporal_semantic_origin
                     #temporal_semantic_origin = tf.squeeze(temporal_semantic_origin)
                     temporal_semantic_origin = tf.reshape(temporal_semantic_origin,
                                                           (temporal_semantic_origin.shape[0]*
