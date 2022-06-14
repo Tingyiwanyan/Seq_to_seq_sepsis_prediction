@@ -9,7 +9,7 @@ import numpy as np
 import random
 
 semantic_step_global = 6
-semantic_positive_sample = 1
+semantic_positive_sample = 5
 unsupervised_cluster_num = 10
 latent_dim_global = 100
 positive_sample_size = 10
@@ -829,9 +829,18 @@ class protatype_ehr():
                         self.extract_temporal_semantic(tcn_temporal_output_first_control,
                                                        on_site_time_control, x_batch_train_control)
 
-                    temporal_semantic = tf.squeeze(temporal_semantic)
-                    temporal_semantic_cohort = tf.squeeze(temporal_semantic_cohort)
-                    temporal_semantic_control = tf.squeeze(temporal_semantic_control)
+                    #temporal_semantic = tf.squeeze(temporal_semantic)
+                    temporal_semantic = tf.reshape(temporal_semantic,
+                                                   (temporal_semantic.shape[0]*temporal_semantic.shape[1],
+                                                    temporal_semantic.shape[2]))
+                    #temporal_semantic_cohort = tf.squeeze(temporal_semantic_cohort)
+                    temporal_semantic_cohort = tf.reshape(temporal_semantic_cohort,
+                                                   (temporal_semantic_cohort.shape[0] * temporal_semantic_cohort.shape[1],
+                                                    temporal_semantic_cohort.shape[2]))
+                    #temporal_semantic_control = tf.squeeze(temporal_semantic_control)
+                    temporal_semantic_control = tf.reshape(temporal_semantic_control,
+                                                   (temporal_semantic_control.shape[0] * temporal_semantic_control.shape[1],
+                                                    temporal_semantic_control.shape[2]))
 
                     temporal_semantic = tf.math.l2_normalize(temporal_semantic,axis=-1)
                     temporal_semantic_cohort = tf.math.l2_normalize(temporal_semantic_cohort,axis=-1)
@@ -839,10 +848,15 @@ class protatype_ehr():
 
                     temporal_semantic_ = tf.expand_dims(temporal_semantic,1)
                     temporal_semantic_reconstruct = self.deconv(temporal_semantic_)
-                    temporal_semantic_origin = tf.squeeze(temporal_semantic_origin)
+                    #temporal_semantic_origin = tf.squeeze(temporal_semantic_origin)
+                    temporal_semantic_origin = tf.reshape(temporal_semantic_origin,
+                                                          (temporal_semantic_origin.shape[0]*
+                                                           temporal_semantic_origin.shape[1],
+                                                           temporal_semantic_origin.shape[2]))
 
                     self.check_temporal_semantic = temporal_semantic
                     self.check_temporal_semantic_cohort = temporal_semantic_cohort
+                    self.check_temporal_semantic_origin = temporal_semantic_origin
 
                     temporal_semantic_reconstruct = tf.cast(temporal_semantic_reconstruct,tf.float64)
                     temporal_semantic_origin = tf.cast(temporal_semantic_origin,tf.float64)
