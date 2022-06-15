@@ -9,7 +9,7 @@ import numpy as np
 import random
 
 semantic_step_global = 6
-semantic_positive_sample = 1
+semantic_positive_sample = 5
 unsupervised_cluster_num = 10
 latent_dim_global = 100
 positive_sample_size = 10
@@ -114,8 +114,8 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
-        #file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
+        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -524,13 +524,30 @@ class protatype_ehr():
         return projection_regular_loss
 
     def first_lvl_resolution_deconv(self):
-        inputs = layers.Input((1, self.latent_dim))
+        #inputs = layers.Input((1, self.latent_dim))
 
-        tcn_deconv1 = tf.keras.layers.Conv1DTranspose(self.feature_num, self.tcn_filter_size)
+        #tcn_deconv1 = tf.keras.layers.Conv1DTranspose(self.feature_num, self.tcn_filter_size)
 
-        output = tcn_deconv1(inputs)
+        #output = tcn_deconv1(inputs)
 
-        return tf.keras.Model(inputs, output, name='tcn_deconv1')
+        #return tf.keras.Model(inputs, output, name='tcn_deconv1')
+
+        model = tf.keras.Sequential(
+            [
+                # Note the AutoEncoder-like structure.
+                layers.Input((1, self.latent_dim)),
+                layers.Dense(
+                    self.latent_dim,
+                    # use_bias=False,
+                    kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+                    activation='relu'
+                ),
+                layers.Conv1DTranspose(self.feature_num, self.tcn_filter_size)
+                # layers.Input((50)),
+            ],
+            name="deconv_layer",
+        )
+        return model
 
     def one_h_resolution_deconv(self):
         inputs = layers.Input((1, self.latent_dim))
@@ -829,20 +846,45 @@ class protatype_ehr():
                         self.extract_temporal_semantic(tcn_temporal_output_first_control,
                                                        on_site_time_control, x_batch_train_control)
 
-                    temporal_semantic = tf.squeeze(temporal_semantic)
-                    temporal_semantic_cohort = tf.squeeze(temporal_semantic_cohort)
-                    temporal_semantic_control = tf.squeeze(temporal_semantic_control)
+                    y_batch_train = tf.expand_dims(y_batch_train,axis=1)
+                    y_batch_train = tf.broadcast_to(y_batch_train,
+                                               shape=(temporal_semantic.shape[0],
+                                                      temporal_semantic.shape[1]))
+                    y_batch_train = tf.reshape(y_batch_train,(y_batch_train.shape[0]*y_batch_train.shape[1]))
+                    #temporal_semantic = tf.squeeze(temporal_semantic)
+                    temporal_semantic = tf.reshape(temporal_semantic,
+                                                   (temporal_semantic.shape[0]*temporal_semantic.shape[1],
+                                                    temporal_semantic.shape[2]))
+                    #temporal_semantic_cohort = tf.squeeze(temporal_semantic_cohort)
+                    temporal_semantic_cohort = tf.reshape(temporal_semantic_cohort,
+                                                   (temporal_semantic_cohort.shape[0] * temporal_semantic_cohort.shape[1],
+                                                    temporal_semantic_cohort.shape[2]))
+                    #temporal_semantic_control = tf.squeeze(temporal_semantic_control)
+                    temporal_semantic_control = tf.reshape(temporal_semantic_control,
+                                                   (temporal_semantic_control.shape[0] * temporal_semantic_control.shape[1],
+                                                    temporal_semantic_control.shape[2]))
 
-                    temporal_semantic = tf.math.l2_normalize(temporal_semantic,axis=-1)
-                    temporal_semantic_cohort = tf.math.l2_normalize(temporal_semantic_cohort,axis=-1)
-                    temporal_semantic_control = tf.math.l2_normalize(temporal_semantic_control,axis=-1)
+                    temporal_semantic_transit = self.transition_layer(temporal_semantic)
+                    temporal_semantic_cohort_transit = self.transition_layer(temporal_semantic_cohort)
+                    temporal_semantic_control_transit = self.transition_layer(temporal_semantic_control)
+
+                    temporal_semantic = tf.cast(tf.math.l2_normalize(temporal_semantic_transit,axis=-1),tf.float64)
+                    temporal_semantic_cohort = tf.cast(tf.math.l2_normalize(temporal_semantic_cohort_transit,axis=-1),tf.float64)
+                    temporal_semantic_control = tf.cast(tf.math.l2_normalize(temporal_semantic_control_transit,axis=-1),tf.float64)
 
                     temporal_semantic_ = tf.expand_dims(temporal_semantic,1)
                     temporal_semantic_reconstruct = self.deconv(temporal_semantic_)
-                    temporal_semantic_origin = tf.squeeze(temporal_semantic_origin)
+                    self.check_temporal_semantic_origin_ = temporal_semantic_origin
+                    #temporal_semantic_origin = tf.squeeze(temporal_semantic_origin)
+                    temporal_semantic_origin = tf.reshape(temporal_semantic_origin,
+                                                          (temporal_semantic_origin.shape[0]*
+                                                           temporal_semantic_origin.shape[1],
+                                                           temporal_semantic_origin.shape[2],
+                                                           temporal_semantic_origin.shape[3]))
 
                     self.check_temporal_semantic = temporal_semantic
                     self.check_temporal_semantic_cohort = temporal_semantic_cohort
+                    self.check_temporal_semantic_origin = temporal_semantic_origin
 
                     temporal_semantic_reconstruct = tf.cast(temporal_semantic_reconstruct,tf.float64)
                     temporal_semantic_origin = tf.cast(temporal_semantic_origin,tf.float64)
@@ -864,12 +906,14 @@ class protatype_ehr():
                 #if epoch == 0 or epoch % 2 == 0:
                 gradients = \
                     tape.gradient(loss,
-                                  self.tcn_first.trainable_variables+self.deconv.trainable_variables)
+                                  self.tcn_first.trainable_variables+self.deconv.trainable_variables
+                                  +self.transition_layer.trainable_variables)
                                   #+self.deconv.trainable_variables)
                 optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
                 optimizer.apply_gradients(zip(gradients,
-                                              self.tcn_first.trainable_variables+self.deconv.trainable_variables))
+                                              self.tcn_first.trainable_variables+self.deconv.trainable_variables
+                                              +self.transition_layer.trainable_variables))
                 #if epoch % 2 == 1:
                  #   gradients = \
                   #      tape.gradient(loss, self.transition_layer.trainable_variables)
@@ -1095,6 +1139,11 @@ class protatype_ehr():
 
         self.temporal_semantic_cohort = tf.math.l2_normalize(tf.squeeze(self.temporal_semantic_cohort),axis=-1)
         self.temporal_semantic_control = tf.math.l2_normalize(tf.squeeze(self.temporal_semantic_control),axis=-1)
+
+        with open('temporal_semantic_embedding_cohort.npy','wb') as f:
+            np.save(f,self.temporal_semantic_cohort)
+        with open('temporal_semantic_embedding_control.npy','wb') as f:
+            np.save(f,self.temporal_semantic_control)
 
 
     def reconstruct_signal(self):
