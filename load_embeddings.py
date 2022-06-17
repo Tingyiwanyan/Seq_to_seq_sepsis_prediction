@@ -22,6 +22,10 @@ class load_embeddings:
             self.on_site_embedding = np.load(f)
         with open('on_site_logit4.npy', 'rb') as f:
             self.on_site_logit = np.load(f)
+        with open('temporal_semantic_embedding_cohort.npy','rb') as f:
+            self.on_site_embedding_cohort = np.load(f)
+        with open('temporal_semantic_embedding_control.npy','rb') as f:
+            self.on_site_embedding_control = np.load(f)
         #with open('temporal_semantic_embedding5.npy', 'rb') as f:
          #   self.temporal_semantic_embedding = np.load(f)
         #with open('temporal_semantic_embedding_cohort.npy','rb') as f:
@@ -29,6 +33,8 @@ class load_embeddings:
         #with open('temporal_semantic_embedding_control.npy','rb') as f:
          #   self.temporal_semantic_embedding_control = np.load(f)
 
+        self.center_cohort_on_site = tf.expand_dims(tf.reduce_mean(self.on_site_embedding_cohort, 0),0)
+        self.center_control_on_site = tf.expand_dims(tf.reduce_mean(self.on_site_embedding_control, 0),0)
         """
         self.on_site_logit = tf.expand_dims(self.on_site_logit,1)
         self.on_site_logit = tf.broadcast_to(self.on_site_logit,(self.on_site_logit.shape[0],
@@ -50,13 +56,23 @@ class load_embeddings:
 
     def vis_embedding_load(self):
         #CL_k = TSNE(n_components=2).fit_transform(np.array(self.on_site_embedding)[0:5000, :])
+        self.vis_embedding_on_site = np.array(self.on_site_embedding)[0:5000,:]
+        self.vis_embedding_on_site = np.concatenate((self.vis_embedding_on_site,
+                                                                self.center_cohort_on_site),
+                                                               axis=0)
+        self.vis_embedding_on_site = np.concatenate((self.vis_embedding_on_site,
+                                                     self.center_control_on_site),
+                                                    axis=0)
 
-        CL_k = umap.UMAP().fit_transform(np.array(self.on_site_embedding)[0:5000, :])
+        CL_k = umap.UMAP().fit_transform(self.vis_embedding_on_site)
         for i in range(5000):
             if self.on_site_logit[i] == 0:
                 plt.plot(CL_k[i][0], CL_k[i][1], 'o', color='blue', markersize=1)
             if self.on_site_logit[i] == 1:
                 plt.plot(CL_k[i][0], CL_k[i][1], 'o', color='red', markersize=5)
+
+        plt.plot(CL_k[-2][0], CL_k[-2][1], 'o', color='yellow', markersize=9)
+        plt.plot(CL_k[-1][0], CL_k[-1][1], 'o', color='green', markersize=9)
 
         plt.show()
 

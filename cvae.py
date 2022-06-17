@@ -561,6 +561,25 @@ class protatype_ehr():
 
         return tf.keras.Model(inputs, output, name='tcn_deconv1')
 
+    def whole_signal_deconv(self):
+        dilation1 = 1  # 3 hours
+        dilation2 = 2  # 7hours
+        dilation3 = 4  # 15hours
+        dilation4 = 8
+
+        inputs = layers.Input((1, self.latent_dim))
+
+        tcn_deconv1 = tf.keras.layers.Conv1DTranspose(self.latent_dim, self.tcn_filter_size,activation='relu',
+                                           dilation_rate=dilation1)
+
+        output_deconv1 = tcn_deconv1(inputs)
+
+        tcn_deconv2 = tf.keras.layers.Conv1DTranspose(output_deconv1.shape[1],self.tcn_filter_size,activation='relu',
+                                           dilation_rate=dilation2)
+
+        return tf.keras.Model(inputs,[tcn_deconv1,tcn_deconv2], name='tcn_deconv')
+
+
     def tcn_encoder_second_last_level(self):
         """
         Implement tcn encoder
@@ -1124,6 +1143,7 @@ class protatype_ehr():
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
 
                     self.loss_track.append(loss)
+
 
     def reconstruct_signal_first_lvl(self):
         temporal_cohort_1_lvl_resolution = self.tcn_first(self.memory_bank_cohort)[1]
