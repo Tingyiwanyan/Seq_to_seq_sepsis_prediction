@@ -1080,7 +1080,7 @@ class protatype_ehr():
                     on_site_extract_array_control = tf.stack(on_site_extract_control)
 
                     temporal_semantic_ = tf.expand_dims(on_site_extract_array, 1)
-                    temporal_semantic_reconstruct = self.deconv_whole(temporal_semantic_)
+                    temporal_semantic_reconstruct = self.deconv_whole(temporal_semantic_)[3]
 
                     """
                     temporal_semantic, sample_sequence_batch, temporal_semantic_origin = \
