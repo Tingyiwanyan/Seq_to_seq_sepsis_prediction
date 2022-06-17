@@ -339,6 +339,7 @@ class protatype_ehr():
         return loss
 
     def extract_reconstruction_resolution(self,on_site_time,x_batch_origin,resolution):
+        self.check_batch_origin = x_batch_origin
         sample_sequence_origin = np.zeros((x_batch_origin.shape[0], resolution,
                                            x_batch_origin.shape[-1]))
 
