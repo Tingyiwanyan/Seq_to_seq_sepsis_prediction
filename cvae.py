@@ -1052,8 +1052,7 @@ class protatype_ehr():
                 on_site_time_cohort = self.memory_bank_cohort_on_site[random_indices_cohort]
                 on_site_time_control = self.memory_bank_control_on_site[random_indices_control]
 
-                batch_resolution_reconstruct = self.extract_reconstruction_resolution(x_batch_train,on_site_time,
-                                                                                           semantic_origin)
+                batch_resolution_reconstruct = self.extract_reconstruction_resolution(on_site_time,semantic_origin,31)
                 self.check_batch_resolution_reconstruct = batch_resolution_reconstruct
 
 
