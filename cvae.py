@@ -338,6 +338,22 @@ class protatype_ehr():
 
         return loss
 
+    def extract_reconstruction_resolution(self,on_site_time,x_batch_origin,resolution):
+        sample_sequence_origin = np.zeros((x_batch_origin.shape[0], resolution,
+                                           x_batch_origin.shape[-1]))
+
+        for k in range(x_batch_origin.shape[1]):
+            single_on_site = on_site_time[k]
+            if single_on_site > resolution:
+                sample_sequence_origin[k,:,:] = x_batch_origin[k,-resolution:,:]
+            if single_on_site == resolution:
+                sample_sequence_origin[k,:,:] = x_batch_origin[k,0:resolution,:]
+            if single_on_site < resolution:
+                sample_sequence_origin[k,(resolution-single_on_site):,:] = x_batch_origin[k,0:single_on_site,:]
+                sample_sequence_origin[k,0:(resolution-single_on_site),:] = x_batch_origin[k,0,:]
+
+        return sample_sequence_origin
+
     def extract_temporal_semantic(self,x_batch_feature,on_site_time,x_batch_origin):
         #temporal_semantic = \
             #np.zeros((x_batch_feature.shape[0], self.semantic_positive_sample, self.latent_dim))
@@ -980,6 +996,7 @@ class protatype_ehr():
         self.translation = self.translation_layer()
         self.mseloss = tf.keras.losses.MeanSquaredError()
         self.deconv = self.first_lvl_resolution_deconv()
+        self.deconv_whole = self.whole_signal_deconv()
         # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
 
         for epoch in range(self.pre_train_epoch):
@@ -1035,24 +1052,20 @@ class protatype_ehr():
                 on_site_time_cohort = self.memory_bank_cohort_on_site[random_indices_cohort]
                 on_site_time_control = self.memory_bank_control_on_site[random_indices_control]
 
+                batch_resolution_reconstruct = self.extract_reconstruction_resolution(x_batch_train,on_site_time,
+                                                                                           semantic_origin)
+                self.check_batch_resolution_reconstruct = batch_resolution_reconstruct
+
 
                 with tf.GradientTape() as tape:
                     tcn_temporal_output = self.tcn(x_batch_train)
                     tcn_temporal_output_cohort = self.tcn(x_batch_train_cohort)
                     tcn_temporal_output_control = self.tcn(x_batch_train_control)
-                    #translation_vector = self.translation(identity_input_translation)
-                    tcn_temporal_output_first = self.tcn_first(x_batch_train)[1]
-                    tcn_temporal_output_first_cohort = self.tcn_first(x_batch_train_cohort)[1]
-                    tcn_temporal_output_first_control = self.tcn_first(x_batch_train_control)[1]
-                    #translation_vector =
 
                     self.check_output = tcn_temporal_output
                     last_layer_output = tcn_temporal_output[1]
-                    out_put_1h_resolution = tcn_temporal_output[4]
                     last_layer_output_cohort = tcn_temporal_output_cohort[1]
-                    out_put_1h_resolution_cohort = tcn_temporal_output_cohort[4]
                     last_layer_output_control = tcn_temporal_output_control[1]
-                    out_put_1h_resolution_control = tcn_temporal_output_control[4]
                     on_site_extract = [last_layer_output[i, np.abs(int(on_site_time[i] - 1)), :] for i in
                                        range(on_site_time.shape[0])]
                     on_site_extract_array = tf.stack(on_site_extract)
@@ -1065,6 +1078,8 @@ class protatype_ehr():
                                                in range(on_site_time_control.shape[0])]
                     on_site_extract_array_control = tf.stack(on_site_extract_control)
 
+                    temporal_semantic_ = tf.expand_dims(on_site_extract_array, 1)
+                    temporal_semantic_reconstruct = self.deconv_whole(temporal_semantic_)
 
                     """
                     temporal_semantic, sample_sequence_batch, temporal_semantic_origin = \
@@ -1113,7 +1128,7 @@ class protatype_ehr():
                     #temporal_semantic_reconstruct = tf.cast(temporal_semantic_reconstruct,tf.float32)
                     #temporal_semantic_origin = tf.cast(temporal_semantic_origin,tf.float32)
 
-                    #mse_loss = self.mseloss(temporal_semantic_reconstruct,temporal_semantic_origin)
+                    mse_loss = self.mseloss(temporal_semantic_reconstruct,batch_resolution_reconstruct)
 
                     cl_loss = self.info_nce_loss(on_site_extract_array,on_site_extract_array_cohort,
                                               on_site_extract_array_control, y_batch_train)
@@ -1126,7 +1141,7 @@ class protatype_ehr():
                                                                       #on_site_extract_array_control, y_batch_train)
                     #if epoch < 2:
                     #if epoch == 0 or epoch % 2 == 0:
-                    loss = cl_loss#+mse_loss
+                    loss = cl_loss+mse_loss
 
                     #if epoch % 2 == 1:
                         #loss =progression_loss
@@ -1155,8 +1170,8 @@ class protatype_ehr():
                      #     % (step, float(cl_loss_temporal)))
                     #print("Training progression_loss(for one batch) at step %d: %.4f"
                       #    % (step, float(progression_loss)))
-                    #print("Training mse_loss(for one batch) at step %d: %.4f"
-                          #% (step, float(mse_loss)))
+                    print("Training mse_loss(for one batch) at step %d: %.4f"
+                          % (step, float(mse_loss)))
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
 
                     self.loss_track.append(loss)
