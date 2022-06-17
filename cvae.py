@@ -345,13 +345,14 @@ class protatype_ehr():
 
         for k in range(x_batch_origin.shape[1]):
             single_on_site = on_site_time[k]
+            self.check_single_on_site = single_on_site
             if single_on_site > resolution:
                 sample_sequence_origin[k,:,:] = x_batch_origin[k,-resolution:,:]
             if single_on_site == resolution:
                 sample_sequence_origin[k,:,:] = x_batch_origin[k,0:resolution,:]
             if single_on_site < resolution:
                 sample_sequence_origin[k,int(resolution-single_on_site):,:] = x_batch_origin[k,0:single_on_site,:]
-                sample_sequence_origin[k,0:int(resolution-single_on_site),:] = x_batch_origin[k,0,:]
+                #sample_sequence_origin[k,0:int(resolution-single_on_site),:] = x_batch_origin[k,0,:]
 
         return sample_sequence_origin
 
