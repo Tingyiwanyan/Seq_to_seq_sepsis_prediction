@@ -579,7 +579,17 @@ class protatype_ehr():
 
         output_deconv2 = tcn_deconv2(output_deconv1)
 
-        return tf.keras.Model(inputs,[output_deconv1,output_deconv2], name='tcn_deconv')
+        tcn_deconv3 = tf.keras.layers.Conv1DTranspose(output_deconv2.shape[1], self.tcn_filter_size, activation='relu',
+                                                      dilation_rate=dilation3)
+
+        output_deconv3 = tcn_deconv3(output_deconv2)
+
+        tcn_deconv4 = tf.keras.layers.Conv1DTranspose(output_deconv3.shape[1], self.tcn_filter_size, activation='relu',
+                                                      dilation_rate=dilation4)
+
+        output_deconv4 = tcn_deconv4(output_deconv3)
+
+        return tf.keras.Model(inputs,[output_deconv1,output_deconv2,output_deconv3,output_deconv4], name='tcn_deconv')
 
 
     def tcn_encoder_second_last_level(self):
