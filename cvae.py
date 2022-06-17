@@ -351,8 +351,8 @@ class protatype_ehr():
             if single_on_site == resolution:
                 sample_sequence_origin[k,:,:] = x_batch_origin[k,0:resolution,:]
             if single_on_site < resolution:
-                sample_sequence_origin[k,int(resolution-single_on_site):,:] = x_batch_origin[k,0:single_on_site,:]
-                #sample_sequence_origin[k,0:int(resolution-single_on_site),:] = x_batch_origin[k,0,:]
+                sample_sequence_origin[k,int(resolution-single_on_site):,:] = x_batch_origin[k,0:int(single_on_site),:]
+                sample_sequence_origin[k,0:int(resolution-single_on_site),:] = x_batch_origin[k,0,:]
 
         return sample_sequence_origin
 
