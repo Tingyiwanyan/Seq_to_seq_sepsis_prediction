@@ -575,28 +575,24 @@ class protatype_ehr():
 
         output_deconv1 = tcn_deconv1(inputs)
 
-        tcn_deconv2 = tf.keras.layers.Conv1DTranspose(output_deconv1.shape[1],self.tcn_filter_size,activation='relu',
+        tcn_deconv2 = tf.keras.layers.Conv1DTranspose(self.latent_dim,self.tcn_filter_size,activation='relu',
                                            dilation_rate=dilation2)
 
         output_deconv2 = tcn_deconv2(output_deconv1)
 
-        tcn_deconv3 = tf.keras.layers.Conv1DTranspose(output_deconv2.shape[1], self.tcn_filter_size, activation='relu',
+        tcn_deconv3 = tf.keras.layers.Conv1DTranspose(self.latent_dim, self.tcn_filter_size, activation='relu',
                                                       dilation_rate=dilation3)
 
         output_deconv3 = tcn_deconv3(output_deconv2)
 
-        tcn_deconv4 = tf.keras.layers.Conv1DTranspose(output_deconv3.shape[1], self.tcn_filter_size, activation='relu',
+        tcn_deconv4 = tf.keras.layers.Conv1DTranspose(self.feature_num, self.tcn_filter_size, activation='relu',
                                                       dilation_rate=dilation4)
 
         output_deconv4 = tcn_deconv4(output_deconv3)
 
-        tcn_deconv5 = tf.keras.layers.Conv1DTranspose(output_deconv4.shape[1], self.tcn_filter_size, activation='relu',
-                                                      dilation_rate=dilation5)
-
-        output_deconv5 = tcn_deconv5(output_deconv3)
 
         return tf.keras.Model(inputs,
-                              [output_deconv1,output_deconv2,output_deconv3,output_deconv4,output_deconv5],
+                              [output_deconv1,output_deconv2,output_deconv3,output_deconv4],
                               name='tcn_deconv')
 
 
@@ -675,22 +671,9 @@ class protatype_ehr():
         self.outputs4 = conv4_identity(self.outputs4)
         # self.outputs4 = layernorm4(self.outputs4)
 
-        """
-        fifth layer
-        """
-        tcn_conv5 = tf.keras.layers.Conv1D(self.latent_dim, self.tcn_filter_size, activation='relu',
-                                           dilation_rate=dilation5,
-                                           padding='valid')
-        conv5_identity = tf.keras.layers.Conv1D(self.latent_dim, 1, activation='relu',
-                                                dilation_rate=1)
-        #layernorm4 = tf.keras.layers.BatchNormalization()
-        padding_5 = (self.tcn_filter_size - 1) * dilation5
-        inputs5 = tf.pad(self.outputs4, tf.constant([[0, 0], [1, 0], [0, 0]]) * padding_5)
-        self.outputs5 = tcn_conv5(inputs5)
-        self.outputs5 = conv5_identity(self.outputs5)
 
         return tf.keras.Model(inputs,
-                              [inputs, self.outputs5, self.outputs4, self.outputs3, self.outputs2, self.outputs1],
+                              [inputs, self.outputs4, self.outputs3, self.outputs2, self.outputs1],
                               name='tcn_encoder')
 
 
