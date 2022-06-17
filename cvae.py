@@ -9,7 +9,7 @@ import numpy as np
 import random
 
 semantic_step_global = 6
-semantic_positive_sample = 5
+semantic_positive_sample = 1
 unsupervised_cluster_num = 10
 latent_dim_global = 100
 positive_sample_size = 10
@@ -114,8 +114,8 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
-        #file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
+        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -1029,6 +1029,8 @@ class protatype_ehr():
                                                in range(on_site_time_control.shape[0])]
                     on_site_extract_array_control = tf.stack(on_site_extract_control)
 
+
+                    """
                     temporal_semantic, sample_sequence_batch, temporal_semantic_origin = \
                         self.extract_temporal_semantic(tcn_temporal_output_first, on_site_time, x_batch_train)
 
@@ -1059,7 +1061,7 @@ class protatype_ehr():
                     self.check_temporal_semantic = temporal_semantic
                     self.check_on_site_extract = on_site_extract_array
                     self.check_temporal_semantic_origin = temporal_semantic_origin
-
+                    """
                     #tsl_cl_loss = self.info_nce_loss(batch_semantic_temporal_feature,batch_semantic_temporal_feature_cohort,
                                                 #batch_semantic_temporal_feature_control,y_batch_train)
 
@@ -1067,28 +1069,28 @@ class protatype_ehr():
                                                 #on_site_extract_array_control,y_batch_train)
 
 
-                    prediction = self.projection_layer(on_site_extract_array)
+                    #prediction = self.projection_layer(on_site_extract_array)
 
                     #bceloss = self.bceloss(y_batch_train, prediction)
                     #self.check_prediction = prediction
 
-                    temporal_semantic_reconstruct = tf.cast(temporal_semantic_reconstruct,tf.float32)
-                    temporal_semantic_origin = tf.cast(temporal_semantic_origin,tf.float32)
+                    #temporal_semantic_reconstruct = tf.cast(temporal_semantic_reconstruct,tf.float32)
+                    #temporal_semantic_origin = tf.cast(temporal_semantic_origin,tf.float32)
 
-                    mse_loss = self.mseloss(temporal_semantic_reconstruct,temporal_semantic_origin)
+                    #mse_loss = self.mseloss(temporal_semantic_reconstruct,temporal_semantic_origin)
 
                     cl_loss = self.info_nce_loss(on_site_extract_array,on_site_extract_array_cohort,
                                               on_site_extract_array_control, y_batch_train)
 
-                    cl_loss_temporal = self.info_nce_loss(temporal_semantic_transit,temporal_semantic_cohort_transit,
-                                                          temporal_semantic_control_transit, y_batch_train)
+                    #cl_loss_temporal = self.info_nce_loss(temporal_semantic_transit,temporal_semantic_cohort_transit,
+                                                          #temporal_semantic_control_transit, y_batch_train)
 
-                    progression_loss = self.info_nce_loss_progression(temporal_semantic_transit,on_site_extract_array,
-                                                                      on_site_extract_array_cohort,
-                                                                      on_site_extract_array_control, y_batch_train)
+                    #progression_loss = self.info_nce_loss_progression(temporal_semantic_transit,on_site_extract_array,
+                                                                      #on_site_extract_array_cohort,
+                                                                      #on_site_extract_array_control, y_batch_train)
                     #if epoch < 2:
                     #if epoch == 0 or epoch % 2 == 0:
-                    loss = cl_loss_temporal#+mse_loss
+                    loss = cl_loss#+mse_loss
 
                     #if epoch % 2 == 1:
                         #loss =progression_loss
@@ -1096,12 +1098,12 @@ class protatype_ehr():
                 #if epoch == 0 or epoch % 2 == 0:
                 gradients = \
                     tape.gradient(loss,
-                                  self.tcn_first.trainable_variables+self.transition_layer.trainable_variables)
+                                  self.tcn.trainable_variables)
                                   #+self.deconv.trainable_variables)
                 optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
                 optimizer.apply_gradients(zip(gradients,
-                                              self.tcn_first.trainable_variables+self.transition_layer.trainable_variables))
+                                              self.tcn.trainable_variables))
                 #if epoch % 2 == 1:
                  #   gradients = \
                   #      tape.gradient(loss, self.transition_layer.trainable_variables)
@@ -1113,10 +1115,10 @@ class protatype_ehr():
                     #if epoch == 0 or epoch % 2 == 0:
                     print("Training cl_loss(for one batch) at step %d: %.4f"
                           % (step, float(cl_loss)))
-                    print("Training cl_loss_temporal(for one batch) at step %d: %.4f"
-                          % (step, float(cl_loss_temporal)))
-                    print("Training progression_loss(for one batch) at step %d: %.4f"
-                          % (step, float(progression_loss)))
+                    #print("Training cl_loss_temporal(for one batch) at step %d: %.4f"
+                     #     % (step, float(cl_loss_temporal)))
+                    #print("Training progression_loss(for one batch) at step %d: %.4f"
+                      #    % (step, float(progression_loss)))
                     #print("Training mse_loss(for one batch) at step %d: %.4f"
                           #% (step, float(mse_loss)))
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
