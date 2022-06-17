@@ -7,7 +7,7 @@ import numpy as np
 class load_embeddings:
     def __init__(self):
         self.unsupervised_cluster_num_cohort = 5
-        self.unsupervised_cluster_num_control = 10
+        self.unsupervised_cluster_num_control = 5
         self.latent_dim = 100
         self.converge_threshold_E = 50
         self.load_embedding()
@@ -18,8 +18,8 @@ class load_embeddings:
             self.initializer_basis(shape=(self.unsupervised_cluster_num_control, self.latent_dim)))
 
     def load_embedding(self):
-        with open('on_site_embedding5.npy', 'rb') as f:
-            self.on_site_embedding = np.load(f)
+        #with open('on_site_embedding5.npy', 'rb') as f:
+         #   self.on_site_embedding = np.load(f)
         with open('on_site_logit5.npy', 'rb') as f:
             self.on_site_logit = np.load(f)
         with open('temporal_semantic_embedding5.npy', 'rb') as f:
@@ -28,6 +28,23 @@ class load_embeddings:
             self.temporal_semantic_embedding_cohort = np.load(f)
         with open('temporal_semantic_embedding_control.npy','rb') as f:
             self.temporal_semantic_embedding_control = np.load(f)
+
+        self.on_site_logit = tf.expand_dims(self.on_site_logit,1)
+        self.on_site_logit = tf.broadcast_to(self.on_site_logit,(self.on_site_logit.shape[0],
+                                                                 self.temporal_semantic_embedding.shape[1]))
+        self.on_site_logit = tf.reshape(self.on_site_logit,(self.on_site_logit.shape[0]*self.on_site_logit.shape[1]))
+        self.temporal_semantic_embedding = tf.reshape(self.temporal_semantic_embedding,
+                                                      (self.temporal_semantic_embedding.shape[0]
+                                                       *self.temporal_semantic_embedding.shape[1],
+                                                       self.temporal_semantic_embedding.shape[2]))
+        self.temporal_semantic_embedding_cohort = tf.reshape(self.temporal_semantic_embedding_cohort,
+                                                      (self.temporal_semantic_embedding_cohort.shape[0]
+                                                       * self.temporal_semantic_embedding_cohort.shape[1],
+                                                       self.temporal_semantic_embedding_cohort.shape[2]))
+        self.temporal_semantic_embedding_control = tf.reshape(self.temporal_semantic_embedding_control,
+                                                      (self.temporal_semantic_embedding_control.shape[0]
+                                                       * self.temporal_semantic_embedding_control.shape[1],
+                                                       self.temporal_semantic_embedding_control.shape[2]))
 
     def vis_embedding_load(self):
         CL_k = TSNE(n_components=2).fit_transform(np.array(self.on_site_embedding)[0:5000, :])
@@ -112,6 +129,7 @@ class load_embeddings:
 
             cluster_diff = projection_basis_whole - check_converge
             check_converge = projection_basis_whole
+            self.check_converge = check_converge
 
             self.check_cluster_diff = cluster_diff
 
@@ -120,8 +138,8 @@ class load_embeddings:
         return max_value_projection, semantic_cluster
 
     def vis_embedding_tsl_load(self):
-        center_cohort = np.expand_dims(np.mean(self.temporal_semantic_embedding_cohort,0),0)
-        center_control = np.expand_dims(np.mean(self.temporal_semantic_embedding_control,0),0)
+        #center_cohort = np.expand_dims(np.mean(self.temporal_semantic_embedding_cohort,0),0)
+        #center_control = np.expand_dims(np.mean(self.temporal_semantic_embedding_control,0),0)
         max_value_projection_cohort,semantic_cluster_cohort = \
             self.unsupervised_prototype_detection(self.temporal_semantic_embedding_cohort,
                                                  self.init_projection_basis_cohort)
