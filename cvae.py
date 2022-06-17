@@ -1163,6 +1163,12 @@ class protatype_ehr():
                                    in range(on_site_time_control.shape[0])]
         self.temporal_control_on_site = tf.math.l2_normalize(tf.stack(temporal_control_on_site),axis=-1)
 
+        with open('temporal_semantic_embedding_cohort.npy','wb') as f:
+            np.save(f,self.temporal_cohort_on_site)
+
+        with open('temporal_semantic_embedding_control.npy','wb') as f:
+            np.save(f,self.temporal_control_on_site)
+
         self.center_temporal_cohort_on_site = tf.reduce_mean(self.temporal_cohort_on_site,0)
         self.center_temporal_control_on_site = tf.reduce_mean(self.temporal_control_on_site,0)
 
@@ -1263,8 +1269,9 @@ class protatype_ehr():
         with open('on_site_logit'+id+'.npy','wb') as f:
             np.save(f,self.train_logit)
 
-        with open('temporal_semantic_embedding'+id+'.npy','wb') as f:
-            np.save(f,temporal_semantic_whole_transit)
+
+        #with open('temporal_semantic_embedding'+id+'.npy','wb') as f:
+         #   np.save(f,temporal_semantic_whole_transit)
 
     def load_embedding(self):
         with open('on_site_embedding.npy', 'rb') as f:

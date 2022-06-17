@@ -18,17 +18,18 @@ class load_embeddings:
             self.initializer_basis(shape=(self.unsupervised_cluster_num_control, self.latent_dim)))
 
     def load_embedding(self):
-        #with open('on_site_embedding5.npy', 'rb') as f:
-         #   self.on_site_embedding = np.load(f)
-        with open('on_site_logit5.npy', 'rb') as f:
+        with open('on_site_embedding4.npy', 'rb') as f:
+            self.on_site_embedding = np.load(f)
+        with open('on_site_logit4.npy', 'rb') as f:
             self.on_site_logit = np.load(f)
-        with open('temporal_semantic_embedding5.npy', 'rb') as f:
-            self.temporal_semantic_embedding = np.load(f)
-        with open('temporal_semantic_embedding_cohort.npy','rb') as f:
-            self.temporal_semantic_embedding_cohort = np.load(f)
-        with open('temporal_semantic_embedding_control.npy','rb') as f:
-            self.temporal_semantic_embedding_control = np.load(f)
+        #with open('temporal_semantic_embedding5.npy', 'rb') as f:
+         #   self.temporal_semantic_embedding = np.load(f)
+        #with open('temporal_semantic_embedding_cohort.npy','rb') as f:
+         #   self.temporal_semantic_embedding_cohort = np.load(f)
+        #with open('temporal_semantic_embedding_control.npy','rb') as f:
+         #   self.temporal_semantic_embedding_control = np.load(f)
 
+        """
         self.on_site_logit = tf.expand_dims(self.on_site_logit,1)
         self.on_site_logit = tf.broadcast_to(self.on_site_logit,(self.on_site_logit.shape[0],
                                                                  self.temporal_semantic_embedding.shape[1]))
@@ -45,16 +46,21 @@ class load_embeddings:
                                                       (self.temporal_semantic_embedding_control.shape[0]
                                                        * self.temporal_semantic_embedding_control.shape[1],
                                                        self.temporal_semantic_embedding_control.shape[2]))
+        """
 
     def vis_embedding_load(self):
-        CL_k = TSNE(n_components=2).fit_transform(np.array(self.on_site_embedding)[0:5000, :])
+        #CL_k = TSNE(n_components=2).fit_transform(np.array(self.on_site_embedding)[0:5000, :])
+
+        CL_k = umap.UMAP().fit_transform(np.array(self.on_site_embedding)[0:5000, :])
         for i in range(5000):
             if self.on_site_logit[i] == 0:
                 plt.plot(CL_k[i][0], CL_k[i][1], 'o', color='blue', markersize=1)
             if self.on_site_logit[i] == 1:
                 plt.plot(CL_k[i][0], CL_k[i][1], 'o', color='red', markersize=5)
 
-        #plt.show()
+        plt.show()
+
+
 
     def unsupervised_prototype_detection(self,batch_embedding,projection_basis):
 
