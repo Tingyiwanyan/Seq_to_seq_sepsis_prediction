@@ -566,6 +566,7 @@ class protatype_ehr():
         dilation2 = 2  # 7hours
         dilation3 = 4  # 15hours
         dilation4 = 8
+        dilation5 = 16
 
         inputs = layers.Input((1, self.latent_dim))
 
@@ -589,7 +590,14 @@ class protatype_ehr():
 
         output_deconv4 = tcn_deconv4(output_deconv3)
 
-        return tf.keras.Model(inputs,[output_deconv1,output_deconv2,output_deconv3,output_deconv4], name='tcn_deconv')
+        tcn_deconv5 = tf.keras.layers.Conv1DTranspose(output_deconv4.shape[1], self.tcn_filter_size, activation='relu',
+                                                      dilation_rate=dilation5)
+
+        output_deconv5 = tcn_deconv5(output_deconv3)
+
+        return tf.keras.Model(inputs,
+                              [output_deconv1,output_deconv2,output_deconv3,output_deconv4,output_deconv5],
+                              name='tcn_deconv')
 
 
     def tcn_encoder_second_last_level(self):
@@ -603,7 +611,7 @@ class protatype_ehr():
         dilation2 = 2  # 7hours
         dilation3 = 4  # 15hours
         dilation4 = 8  # with filter size 3, 8x3=24, already covers the whole time sequence
-        # dilation5 = 16
+        dilation5 = 16
 
         """
         define the first tcn layer, dilation=1
@@ -667,8 +675,22 @@ class protatype_ehr():
         self.outputs4 = conv4_identity(self.outputs4)
         # self.outputs4 = layernorm4(self.outputs4)
 
+        """
+        fifth layer
+        """
+        tcn_conv5 = tf.keras.layers.Conv1D(self.latent_dim, self.tcn_filter_size, activation='relu',
+                                           dilation_rate=dilation5,
+                                           padding='valid')
+        conv5_identity = tf.keras.layers.Conv1D(self.latent_dim, 1, activation='relu',
+                                                dilation_rate=1)
+        #layernorm4 = tf.keras.layers.BatchNormalization()
+        padding_5 = (self.tcn_filter_size - 1) * dilation5
+        inputs5 = tf.pad(self.outputs4, tf.constant([[0, 0], [1, 0], [0, 0]]) * padding_5)
+        self.outputs5 = tcn_conv5(inputs5)
+        self.outputs5 = conv5_identity(self.outputs5)
+
         return tf.keras.Model(inputs,
-                              [inputs, self.outputs4, self.outputs3, self.outputs2, self.outputs1],
+                              [inputs, self.outputs5, self.outputs4, self.outputs3, self.outputs2, self.outputs1],
                               name='tcn_encoder')
 
 
