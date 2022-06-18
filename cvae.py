@@ -47,6 +47,26 @@ class protatype_ehr():
         #self.length_val = len(self.validate_data)
         self.loss_tracker = tf.keras.metrics.Mean(name="loss")
 
+        self.ave_all = [8.38230435e+01, 9.75000000e+01, 3.69060000e+01, 1.18333333e+02,
+                        7.71140148e+01, 5.90000000e+01, 1.81162791e+01, 0.00000000e+00,
+                        -2.50000000e-01, 2.43333333e+01, 5.04195804e-01, 7.38666667e+00,
+                        4.00504808e+01, 9.60000000e+01, 4.20000000e+01, 1.65000000e+01,
+                        7.70000000e+01, 8.35000000e+00, 1.06000000e+02, 9.00000000e-01,
+                        1.16250000e+00, 1.25333333e+02, 1.65000000e+00, 2.00000000e+00,
+                        3.36666667e+00, 4.08000000e+00, 7.00000000e-01, 3.85000000e+00,
+                        3.09000000e+01, 1.05000000e+01, 3.11000000e+01, 1.08333333e+01,
+                        2.55875000e+02, 1.93708333e+02]
+
+        self.std_all = [1.40828962e+01, 2.16625304e+00, 5.53108392e-01, 1.66121889e+01,
+                        1.08476132e+01, 9.94962122e+00, 3.59186362e+00, 0.00000000e+00,
+                        3.89407506e+00, 3.91858658e+00, 2.04595954e-01, 5.93467422e-02,
+                        7.72257867e+00, 8.87388075e+00, 5.77276895e+02, 1.79879091e+01,
+                        1.36508822e+02, 6.95188900e-01, 5.09788015e+00, 1.43347221e+00,
+                        3.75415153e+00, 4.03968485e+01, 1.71418146e+00, 3.15505742e-01,
+                        1.17084555e+00, 4.77914796e-01, 3.62933460e+00, 9.91058703e+00,
+                        4.60374699e+00, 1.64019340e+00, 1.68795640e+01, 6.23941196e+00,
+                        1.75014175e+02, 1.03316340e+02]
+
 
         """
         define hyper-parameters
@@ -594,17 +614,17 @@ class protatype_ehr():
         output_deconv1 = tcn_deconv1(inputs)
 
         tcn_deconv2 = tf.keras.layers.Conv1DTranspose(self.latent_dim,self.tcn_filter_size,activation='relu',
-                                           dilation_rate=dilation2)
+                                           dilation_rate=dilation1)
 
         output_deconv2 = tcn_deconv2(output_deconv1)
 
         tcn_deconv3 = tf.keras.layers.Conv1DTranspose(self.latent_dim, self.tcn_filter_size, activation='relu',
-                                                      dilation_rate=dilation3)
+                                                      dilation_rate=dilation1)
 
         output_deconv3 = tcn_deconv3(output_deconv2)
 
         tcn_deconv4 = tf.keras.layers.Conv1DTranspose(self.feature_num, self.tcn_filter_size, activation='relu',
-                                                      dilation_rate=dilation4)
+                                                      dilation_rate=dilation1)
 
         output_deconv4 = tcn_deconv4(output_deconv3)
 
