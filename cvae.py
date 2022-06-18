@@ -608,28 +608,28 @@ class protatype_ehr():
 
         inputs = layers.Input((1, self.latent_dim))
 
-        kernel_size1 = dilation1*(self.tcn_filter_size-1)+inputs.shape[0]
+        kernel_size1 = dilation1*(self.tcn_filter_size-1)+inputs.shape[1]
 
         tcn_deconv1 = tf.keras.layers.Conv1DTranspose(self.latent_dim, kernel_size1,activation='relu',
                                            dilation_rate=dilation1)
 
         output_deconv1 = tcn_deconv1(inputs)
 
-        kernal_size2 = dilation2*(self.tcn_filter_size-1)+output_deconv1.shape[0]
+        kernal_size2 = dilation2*(self.tcn_filter_size-1)+output_deconv1.shape[1]
 
         tcn_deconv2 = tf.keras.layers.Conv1DTranspose(self.latent_dim,kernal_size2,activation='relu',
                                            dilation_rate=dilation1)
 
         output_deconv2 = tcn_deconv2(output_deconv1)
 
-        kernal_size3 = dilation3*(self.tcn_filter_size-1)+output_deconv2.shape[0]
+        kernal_size3 = dilation3*(self.tcn_filter_size-1)+output_deconv2.shape[1]
 
         tcn_deconv3 = tf.keras.layers.Conv1DTranspose(self.latent_dim, kernal_size3, activation='relu',
                                                       dilation_rate=dilation1)
 
         output_deconv3 = tcn_deconv3(output_deconv2)
 
-        kernal_size4 = dilation4*(self.tcn_filter_size-1)+output_deconv3.shape[0]
+        kernal_size4 = dilation4*(self.tcn_filter_size-1)+output_deconv3.shape[1]
 
         tcn_deconv4 = tf.keras.layers.Conv1DTranspose(self.feature_num, kernal_size4, activation='relu',
                                                       dilation_rate=dilation1)
