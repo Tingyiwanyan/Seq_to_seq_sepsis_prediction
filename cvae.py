@@ -609,20 +609,21 @@ class protatype_ehr():
         inputs = layers.Input((1, self.latent_dim))
 
         kernel_size1 = dilation1*(self.tcn_filter_size-1)+inputs.shape[1]
+        kernel_size1 = kernel_size1 - inputs.shape[1] + 1
 
         tcn_deconv1 = tf.keras.layers.Conv1DTranspose(self.latent_dim, kernel_size1,activation='relu',
                                            dilation_rate=dilation1)
-
         output_deconv1 = tcn_deconv1(inputs)
 
         kernal_size2 = dilation2*(self.tcn_filter_size-1)+output_deconv1.shape[1]
+        kernal_size2 = kernal_size2 - output_deconv1.shape[1] + 1
 
         tcn_deconv2 = tf.keras.layers.Conv1DTranspose(self.latent_dim,kernal_size2,activation='relu',
                                            dilation_rate=dilation1)
-
         output_deconv2 = tcn_deconv2(output_deconv1)
 
         kernal_size3 = dilation3*(self.tcn_filter_size-1)+output_deconv2.shape[1]
+        kernal_size3 = kernal_size3 - output_deconv2.shape[1] + 1
 
         tcn_deconv3 = tf.keras.layers.Conv1DTranspose(self.latent_dim, kernal_size3, activation='relu',
                                                       dilation_rate=dilation1)
@@ -630,6 +631,7 @@ class protatype_ehr():
         output_deconv3 = tcn_deconv3(output_deconv2)
 
         kernal_size4 = dilation4*(self.tcn_filter_size-1)+output_deconv3.shape[1]
+        kernal_size4 = kernal_size4 - output_deconv3.shape[1] + 1
 
         tcn_deconv4 = tf.keras.layers.Conv1DTranspose(self.feature_num, kernal_size4, activation='relu',
                                                       dilation_rate=dilation1)
@@ -1072,6 +1074,8 @@ class protatype_ehr():
                 self.check_x_batch = x_batch_train
                 self.check_on_site_time = on_site_time
                 self.check_label = y_batch_train
+                semantic_origin = x_batch_train
+                self.check_semantic_origin = semantic_origin
                 identity_input_translation = np.zeros((x_batch_train.shape[0],self.latent_dim))
 
                 random_indices_cohort = np.random.choice(self.num_cohort, size=x_batch_train.shape[0], replace=False)
