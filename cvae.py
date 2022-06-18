@@ -363,7 +363,7 @@ class protatype_ehr():
         sample_sequence_origin = np.zeros((x_batch_origin.shape[0], resolution,
                                            x_batch_origin.shape[-1]))
 
-        for k in range(x_batch_origin.shape[1]):
+        for k in range(x_batch_origin.shape[0]):
             single_on_site = on_site_time[k]
             self.check_single_on_site = single_on_site
             if single_on_site > resolution:
@@ -1113,6 +1113,7 @@ class protatype_ehr():
 
                     temporal_semantic_ = tf.expand_dims(on_site_extract_array, 1)
                     temporal_semantic_reconstruct = self.deconv_whole(temporal_semantic_)[3]
+                    self.check_temporal_semantic_reconstruct = temporal_semantic_reconstruct
 
                     """
                     temporal_semantic, sample_sequence_batch, temporal_semantic_origin = \
