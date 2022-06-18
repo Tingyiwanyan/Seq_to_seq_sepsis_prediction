@@ -1162,6 +1162,9 @@ class protatype_ehr():
                     #temporal_semantic_reconstruct = tf.cast(temporal_semantic_reconstruct,tf.float32)
                     #temporal_semantic_origin = tf.cast(temporal_semantic_origin,tf.float32)
 
+                    temporal_semantic_reconstruct = tf.cast(temporal_semantic_reconstruct,tf.float64)
+                    batch_resolution_reconstruct = tf.cast(batch_resolution_reconstruct,tf.float64)
+
                     mse_loss = self.mseloss(temporal_semantic_reconstruct,batch_resolution_reconstruct)
 
                     cl_loss = self.info_nce_loss(on_site_extract_array,on_site_extract_array_cohort,
