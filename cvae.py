@@ -179,7 +179,7 @@ class protatype_ehr():
                                                                 self.train_data.shape[2]))
 
         self.train_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.train_data, self.train_logit, self.train_on_site_time, self.train_data_norm))  # ,self.train_sofa_score))
+            (self.train_data, self.train_logit, self.train_on_site_time, self.train_data_origin))  # ,self.train_sofa_score))
         self.train_dataset = self.train_dataset.shuffle(buffer_size=1024).batch(self.batch_size)
         cohort_index = np.where(self.train_logit == 1)[0]
         control_index = np.where(self.train_logit == 0)[0]
@@ -652,27 +652,14 @@ class protatype_ehr():
 
         tcn_deconv4 = tf.keras.layers.Conv1DTranspose(self.feature_num, kernal_size4, activation='relu',
                                                       dilation_rate=dilation1)
-        conv4_identity = tf.keras.layers.Conv1D(self.feature_num, 1, activation='sigmoid',
-                                                dilation_rate=1)
+        #conv4_identity = tf.keras.layers.Conv1D(self.feature_num, 1, activation='sigmoid',
+         #                                       dilation_rate=1)
 
         output_deconv4 = tcn_deconv4(output_deconv3)
-        output_deconv4 = conv4_identity(output_deconv4)
-
-        #projection_layer = layers.Dense(
-         #   self.feature_num,
-            # use_bias=False,
-          #  kernel_initializer=tf.keras.initializers.he_normal(seed=None),
-           # activation='sigmoid'
-        #)
-
-        #output5 = projection_layer(output_deconv4)
-
-
-
 
 
         return tf.keras.Model(inputs,
-                              [output_deconv1,output_deconv2,output_deconv3,output_deconv4],
+                              output_deconv4,
                               name='tcn_deconv')
 
 
@@ -1144,55 +1131,9 @@ class protatype_ehr():
                     on_site_extract_array_control = tf.stack(on_site_extract_control)
 
                     temporal_semantic_ = tf.expand_dims(on_site_extract_array, 1)
-                    temporal_semantic_reconstruct = self.deconv_whole(temporal_semantic_)[3]
+                    temporal_semantic_reconstruct = self.deconv_whole(temporal_semantic_)
                     self.check_temporal_semantic_reconstruct = temporal_semantic_reconstruct
 
-                    """
-                    temporal_semantic, sample_sequence_batch, temporal_semantic_origin = \
-                        self.extract_temporal_semantic(tcn_temporal_output_first, on_site_time, x_batch_train)
-
-                    temporal_semantic_cohort, sample_sequence_batch_cohort, temporal_semantic_origin_cohort = \
-                        self.extract_temporal_semantic(tcn_temporal_output_first_cohort,
-                                                       on_site_time_cohort, x_batch_train_cohort)
-
-                    temporal_semantic_control, sample_sequence_batch_control, temporal_semantic_origin_control = \
-                        self.extract_temporal_semantic(tcn_temporal_output_first_control,
-                                                       on_site_time_control, x_batch_train_control)
-
-                    temporal_semantic = tf.squeeze(temporal_semantic)
-                    temporal_semantic_cohort = tf.squeeze(temporal_semantic_cohort)
-                    temporal_semantic_control = tf.squeeze(temporal_semantic_control)
-
-                    temporal_semantic = tf.math.l2_normalize(temporal_semantic,axis=-1)
-                    temporal_semantic_cohort = tf.math.l2_normalize(temporal_semantic_cohort,axis=-1)
-                    temporal_semantic_control = tf.math.l2_normalize(temporal_semantic_control,axis=-1)
-
-                    temporal_semantic_transit = self.transition_layer(temporal_semantic)
-                    temporal_semantic_cohort_transit = self.transition_layer(temporal_semantic_cohort)
-                    temporal_semantic_control_transit = self.transition_layer(temporal_semantic_control)
-
-                    temporal_semantic_ = tf.expand_dims(temporal_semantic,1)
-                    temporal_semantic_reconstruct = self.deconv(temporal_semantic_)
-                    temporal_semantic_origin = tf.squeeze(temporal_semantic_origin)
-
-                    self.check_temporal_semantic = temporal_semantic
-                    self.check_on_site_extract = on_site_extract_array
-                    self.check_temporal_semantic_origin = temporal_semantic_origin
-                    """
-                    #tsl_cl_loss = self.info_nce_loss(batch_semantic_temporal_feature,batch_semantic_temporal_feature_cohort,
-                                                #batch_semantic_temporal_feature_control,y_batch_train)
-
-                    #tsl_loss = self.info_nce_loss(batch_semantic_temporal_feature,on_site_extract_array_cohort,
-                                                #on_site_extract_array_control,y_batch_train)
-
-
-                    #prediction = self.projection_layer(on_site_extract_array)
-
-                    #bceloss = self.bceloss(y_batch_train, prediction)
-                    #self.check_prediction = prediction
-
-                    #temporal_semantic_reconstruct = tf.cast(temporal_semantic_reconstruct,tf.float32)
-                    #temporal_semantic_origin = tf.cast(temporal_semantic_origin,tf.float32)
 
                     temporal_semantic_reconstruct = tf.cast(temporal_semantic_reconstruct,tf.float64)
                     batch_resolution_reconstruct = tf.cast(batch_resolution_reconstruct,tf.float64)
