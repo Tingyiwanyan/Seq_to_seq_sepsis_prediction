@@ -169,7 +169,7 @@ class protatype_ehr():
         self.train_data_range = self.max_train_data - self.min_train_data
         for i in range(self.train_data_range.shape[0]):
             if self.train_data_range[i] == 0:
-                self.train_data_range[0] = 1
+                self.train_data_range[i] = 1
 
         self.train_data_norm = (np.reshape(self.train_data,
                                            (self.train_data.shape[0]*self.train_data.shape[1],
