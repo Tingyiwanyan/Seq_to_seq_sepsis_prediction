@@ -650,26 +650,29 @@ class protatype_ehr():
         kernal_size4 = dilation4*(self.tcn_filter_size-1)+output_deconv3.shape[1]
         kernal_size4 = kernal_size4 - output_deconv3.shape[1] + 1
 
-        tcn_deconv4 = tf.keras.layers.Conv1DTranspose(self.latent_dim, kernal_size4, activation='relu',
+        tcn_deconv4 = tf.keras.layers.Conv1DTranspose(self.feature_num, kernal_size4, activation='relu',
                                                       dilation_rate=dilation1)
+        conv4_identity = tf.keras.layers.Conv1D(self.feature_num, 1, activation='sigmoid',
+                                                dilation_rate=1)
 
         output_deconv4 = tcn_deconv4(output_deconv3)
+        output_deconv4 = conv4_identity(output_deconv4)
 
-        projection_layer = layers.Dense(
-            self.feature_num,
+        #projection_layer = layers.Dense(
+         #   self.feature_num,
             # use_bias=False,
-            kernel_initializer=tf.keras.initializers.he_normal(seed=None),
-            activation='sigmoid'
-        )
+          #  kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+           # activation='sigmoid'
+        #)
 
-        output5 = projection_layer(output_deconv4)
+        #output5 = projection_layer(output_deconv4)
 
 
 
 
 
         return tf.keras.Model(inputs,
-                              [output_deconv1,output_deconv2,output_deconv3,output_deconv4,output5],
+                              [output_deconv1,output_deconv2,output_deconv3,output_deconv4],
                               name='tcn_deconv')
 
 
@@ -1141,7 +1144,7 @@ class protatype_ehr():
                     on_site_extract_array_control = tf.stack(on_site_extract_control)
 
                     temporal_semantic_ = tf.expand_dims(on_site_extract_array, 1)
-                    temporal_semantic_reconstruct = self.deconv_whole(temporal_semantic_)[4]
+                    temporal_semantic_reconstruct = self.deconv_whole(temporal_semantic_)[3]
                     self.check_temporal_semantic_reconstruct = temporal_semantic_reconstruct
 
                     """
@@ -1216,12 +1219,12 @@ class protatype_ehr():
                 #if epoch == 0 or epoch % 2 == 0:
                 gradients = \
                     tape.gradient(loss,
-                                  self.tcn.trainable_variables)
+                                  self.tcn.trainable_variables+self.deconv_whole.trainable_variables)
                                   #+self.deconv.trainable_variables)
                 optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
                 optimizer.apply_gradients(zip(gradients,
-                                              self.tcn.trainable_variables))
+                                              self.tcn.trainable_variables+self.deconv_whole.trainable_variables))
                 #if epoch % 2 == 1:
                  #   gradients = \
                   #      tape.gradient(loss, self.transition_layer.trainable_variables)
