@@ -1093,7 +1093,7 @@ class protatype_ehr():
                 self.check_x_batch = x_batch_train
                 self.check_on_site_time = on_site_time
                 self.check_label = y_batch_train
-                semantic_origin = x_batch_train
+                #semantic_origin = x_batch_train
                 self.check_semantic_origin = semantic_origin
                 identity_input_translation = np.zeros((x_batch_train.shape[0],self.latent_dim))
 
