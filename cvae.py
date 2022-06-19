@@ -114,8 +114,8 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
-        file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
+        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        #file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -1003,8 +1003,8 @@ class protatype_ehr():
 
         for epoch in range(self.pre_train_epoch):
             input_translation = np.ones(self.latent_dim)
-            #if epoch > 1:
-            self.save_embedding(str(epoch))
+            if epoch > 0:
+                self.save_embedding(str(epoch))
             print("\nStart of epoch %d" % (epoch,))
 
             # extract_val, global_val,k = self.model_extractor(self.val_data)
@@ -1044,6 +1044,7 @@ class protatype_ehr():
                 self.check_x_batch = x_batch_train
                 self.check_on_site_time = on_site_time
                 self.check_label = y_batch_train
+                self.check_semantic_origin = semantic_origin
                 identity_input_translation = np.zeros((x_batch_train.shape[0],self.latent_dim))
 
                 random_indices_cohort = np.random.choice(self.num_cohort, size=x_batch_train.shape[0], replace=False)
