@@ -179,7 +179,7 @@ class protatype_ehr():
                                                                 self.train_data.shape[2]))
 
         self.train_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.train_data, self.train_logit, self.train_on_site_time, self.train_data_origin))  # ,self.train_sofa_score))
+            (self.train_data, self.train_logit, self.train_on_site_time, self.train_data_norm))  # ,self.train_sofa_score))
         self.train_dataset = self.train_dataset.shuffle(buffer_size=1024).batch(self.batch_size)
         cohort_index = np.where(self.train_logit == 1)[0]
         control_index = np.where(self.train_logit == 0)[0]
@@ -655,11 +655,21 @@ class protatype_ehr():
 
         output_deconv4 = tcn_deconv4(output_deconv3)
 
+        projection_layer = layers.Dense(
+            self.latent_dim,
+            # use_bias=False,
+            kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+            activation='sigmoid'
+        )
+
+        output5 = projection_layer(output_deconv4)
+
+
 
 
 
         return tf.keras.Model(inputs,
-                              [output_deconv1,output_deconv2,output_deconv3,output_deconv4],
+                              [output_deconv1,output_deconv2,output_deconv3,output_deconv4,output5],
                               name='tcn_deconv')
 
 
@@ -1131,7 +1141,7 @@ class protatype_ehr():
                     on_site_extract_array_control = tf.stack(on_site_extract_control)
 
                     temporal_semantic_ = tf.expand_dims(on_site_extract_array, 1)
-                    temporal_semantic_reconstruct = self.deconv_whole(temporal_semantic_)[3]
+                    temporal_semantic_reconstruct = self.deconv_whole(temporal_semantic_)[4]
                     self.check_temporal_semantic_reconstruct = temporal_semantic_reconstruct
 
                     """
