@@ -179,7 +179,7 @@ class protatype_ehr():
                                                                 self.train_data.shape[2]))
 
         self.train_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.train_data, self.train_logit, self.train_on_site_time, self.train_data_origin))  # ,self.train_sofa_score))
+            (self.train_data, self.train_logit, self.train_on_site_time, self.train_data_norm))  # ,self.train_sofa_score))
         self.train_dataset = self.train_dataset.shuffle(buffer_size=1024).batch(self.batch_size)
         cohort_index = np.where(self.train_logit == 1)[0]
         control_index = np.where(self.train_logit == 0)[0]
@@ -652,10 +652,11 @@ class protatype_ehr():
 
         tcn_deconv4 = tf.keras.layers.Conv1DTranspose(self.feature_num, kernal_size4, activation='relu',
                                                       dilation_rate=dilation1)
-        #conv4_identity = tf.keras.layers.Conv1D(self.feature_num, 1, activation='sigmoid',
-         #                                       dilation_rate=1)
+        conv4_identity = tf.keras.layers.Conv1D(self.feature_num, 1, activation='sigmoid',
+                                                dilation_rate=1)
 
         output_deconv4 = tcn_deconv4(output_deconv3)
+        output_deconv4 = conv4_identity(output_deconv4)
 
 
         return tf.keras.Model(inputs,
