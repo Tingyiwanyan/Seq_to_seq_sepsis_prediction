@@ -161,6 +161,17 @@ class protatype_ehr():
         with open(file_path + 'train_origin.npy', 'rb') as f:
             self.train_data_origin = np.load(f)
 
+        self.max_train_data = np.max(np.reshape(self.train_data,(self.train_data.shape[0]*self.train_data.shape[1],
+                                                                 self.train_data.shape[2])),0)
+        self.min_train_data = np.min(np.reshape(self.train_data,(self.train_data.shape[0]*self.train_data.shape[1],
+                                                                 self.train_data.shape[2])),0)
+
+        self.train_data_range = self.max_train_data - self.min_train_data
+        self.train_data_norm = (np.reshape(self.train_data,
+                                           (self.train_data.shape[0]*self.train_data.shape[1],
+                                                                 self.train_data.shape[2])) - self.min_train_data)\
+                               /self.train_data_range
+
         self.train_dataset = tf.data.Dataset.from_tensor_slices(
             (self.train_data, self.train_logit, self.train_on_site_time, self.train_data_origin))  # ,self.train_sofa_score))
         self.train_dataset = self.train_dataset.shuffle(buffer_size=1024).batch(self.batch_size)
@@ -639,6 +650,8 @@ class protatype_ehr():
         output_deconv4 = tcn_deconv4(output_deconv3)
 
 
+
+
         return tf.keras.Model(inputs,
                               [output_deconv1,output_deconv2,output_deconv3,output_deconv4],
                               name='tcn_deconv')
@@ -1074,7 +1087,7 @@ class protatype_ehr():
                 self.check_x_batch = x_batch_train
                 self.check_on_site_time = on_site_time
                 self.check_label = y_batch_train
-                #semantic_origin = x_batch_train
+                semantic_origin = x_batch_train
                 self.check_semantic_origin = semantic_origin
                 identity_input_translation = np.zeros((x_batch_train.shape[0],self.latent_dim))
 
