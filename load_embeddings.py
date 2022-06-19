@@ -26,6 +26,10 @@ class load_embeddings:
             self.on_site_embedding_cohort = np.load(f)
         with open('temporal_semantic_embedding_control.npy','rb') as f:
             self.on_site_embedding_control = np.load(f)
+        with open('exiting_reconstruct_cohort.npy','rb') as f:
+            self.reconstruct_cohort = np.load(f)
+        with open('exiting_reconstruct_control.npy','rb') as f:
+            self.reconstruct_control = np.load(f)
         #with open('temporal_semantic_embedding5.npy', 'rb') as f:
          #   self.temporal_semantic_embedding = np.load(f)
         #with open('temporal_semantic_embedding_cohort.npy','rb') as f:
