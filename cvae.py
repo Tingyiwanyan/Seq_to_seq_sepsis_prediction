@@ -175,6 +175,8 @@ class protatype_ehr():
                                            (self.train_data.shape[0]*self.train_data.shape[1],
                                                                  self.train_data.shape[2])) - self.min_train_data)\
                                /self.train_data_range
+        self.train_data_norm = np.reshape(self.train_data_norm,(self.train_data.shape[0],self.train_data.shape[1],
+                                                                self.train_data.shape[2]))
 
         self.train_dataset = tf.data.Dataset.from_tensor_slices(
             (self.train_data, self.train_logit, self.train_on_site_time, self.train_data_origin))  # ,self.train_sofa_score))
