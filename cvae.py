@@ -650,13 +650,13 @@ class protatype_ehr():
         kernal_size4 = dilation4*(self.tcn_filter_size-1)+output_deconv3.shape[1]
         kernal_size4 = kernal_size4 - output_deconv3.shape[1] + 1
 
-        tcn_deconv4 = tf.keras.layers.Conv1DTranspose(self.feature_num, kernal_size4, activation='relu',
+        tcn_deconv4 = tf.keras.layers.Conv1DTranspose(self.latent_dim, kernal_size4, activation='relu',
                                                       dilation_rate=dilation1)
 
         output_deconv4 = tcn_deconv4(output_deconv3)
 
         projection_layer = layers.Dense(
-            self.latent_dim,
+            self.feature_num,
             # use_bias=False,
             kernel_initializer=tf.keras.initializers.he_normal(seed=None),
             activation='sigmoid'
