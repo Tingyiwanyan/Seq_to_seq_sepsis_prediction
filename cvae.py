@@ -637,8 +637,13 @@ class protatype_ehr():
 
         tcn_deconv2 = tf.keras.layers.Conv1DTranspose(self.latent_dim,kernal_size2,activation='relu',
                                            dilation_rate=dilation1)
-        output_deconv2 = tcn_deconv2(output_deconv1)
 
+        conv2_identity = tf.keras.layers.Conv1D(self.feature_num, 1, activation='sigmoid',
+                                                dilation_rate=1)
+        output_deconv2 = tcn_deconv2(output_deconv1)
+        output_deconv2 = conv2_identity(output_deconv2)
+
+        """
         kernal_size3 = dilation3*(self.tcn_filter_size-1)+output_deconv2.shape[1]
         kernal_size3 = kernal_size3 - output_deconv2.shape[1] + 1
 
@@ -657,10 +662,10 @@ class protatype_ehr():
 
         output_deconv4 = tcn_deconv4(output_deconv3)
         output_deconv4 = conv4_identity(output_deconv4)
-
+        """
 
         return tf.keras.Model(inputs,
-                              output_deconv4,
+                              output_deconv2,
                               name='tcn_deconv')
 
 
@@ -1094,10 +1099,7 @@ class protatype_ehr():
                 self.check_x_batch = x_batch_train
                 self.check_on_site_time = on_site_time
                 self.check_label = y_batch_train
-<<<<<<< HEAD
-=======
-                #semantic_origin = x_batch_train
->>>>>>> 55f6fbb33a9f373eb0248eba1b5c2170fea57bd3
+
                 self.check_semantic_origin = semantic_origin
                 identity_input_translation = np.zeros((x_batch_train.shape[0],self.latent_dim))
 
@@ -1109,7 +1111,7 @@ class protatype_ehr():
                 on_site_time_cohort = self.memory_bank_cohort_on_site[random_indices_cohort]
                 on_site_time_control = self.memory_bank_control_on_site[random_indices_control]
 
-                batch_resolution_reconstruct = self.extract_reconstruction_resolution(on_site_time,semantic_origin,31)
+                batch_resolution_reconstruct = self.extract_reconstruction_resolution(on_site_time,semantic_origin,7)
                 self.check_batch_resolution_reconstruct = batch_resolution_reconstruct
 
 
