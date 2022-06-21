@@ -396,7 +396,7 @@ class protatype_ehr():
 
         return sample_sequence_origin
 
-    def extract_temporal_semantic(self,x_batch_feature,on_site_time,x_batch_origin,index_batch):
+    def extract_temporal_semantic(self,x_batch_feature,on_site_time,x_batch_origin,index_batch,indicator):
         #temporal_semantic = \
             #np.zeros((x_batch_feature.shape[0], self.semantic_positive_sample, self.latent_dim))
 
@@ -406,7 +406,10 @@ class protatype_ehr():
         temporal_semantic = []
         temporal_semantic_origin = []
 
-        sample_sequence_batch = np.zeros((x_batch_feature.shape[0], self.semantic_positive_sample+1))
+        if indicator == 1:
+            sample_sequence_batch = np.zeros((x_batch_feature.shape[0], self.semantic_positive_sample+1))
+        else:
+            sample_sequence_batch = np.zeros((x_batch_feature.shape[0], self.semantic_positive_sample))
         for k in range(x_batch_feature.shape[0]):
             single_on_site = on_site_time[k]
             #sample_sequence_feature = np.zeros((self.semantic_positive_sample, self.latent_dim))
@@ -422,15 +425,18 @@ class protatype_ehr():
                 if single_on_site > 46:
                     single_on_site = 46
                 sample_sequence = np.sort(random.sample(range(0, int(single_on_site)), self.semantic_positive_sample))
-
-            sample_sequence = np.append(sample_sequence,index_batch[k])
+            if indicator == 1:
+                sample_sequence = np.append(sample_sequence,index_batch[k])
             sample_sequence_batch[k, :] = sample_sequence
             sample_sequence = tf.cast(sample_sequence,tf.int32)
             #self.check_sample_sequence_ = sample_sequence
-
-            sample_sequence_origin = np.zeros((self.semantic_positive_sample+1,self.tcn_filter_size,
+            if indicator == 1:
+                origin_num = self.semantic_positive_sample+1
+            else:
+                origin_num = self.semantic_positive_sample
+            sample_sequence_origin = np.zeros((origin_num,self.tcn_filter_size,
                                                x_batch_origin.shape[-1]))
-            for j in range(self.semantic_positive_sample+1):
+            for j in range(origin_num):
                 #sample_sequence_feature[j, :] = x_batch_feature[k, int(sample_sequence[j]), :]
                 if int(sample_sequence[j])==0:
                     sample_sequence_origin[j,:,:] = x_batch_origin[k,0,:]
@@ -957,17 +963,25 @@ class protatype_ehr():
 
 
                     temporal_semantic, sample_sequence_batch, temporal_semantic_origin = \
-                        self.extract_temporal_semantic(tcn_temporal_output_first, on_site_time, x_batch_train)
+                        self.extract_temporal_semantic(tcn_temporal_output_first, on_site_time,
+                                                       x_batch_train,index_compare,1)
 
                     self.check_sample_sequence_batch = sample_sequence_batch
 
                     temporal_semantic_cohort, sample_sequence_batch_cohort, temporal_semantic_origin_cohort = \
                         self.extract_temporal_semantic(tcn_temporal_output_first_cohort,
-                                                       on_site_time_cohort, x_batch_train_cohort)
+                                                       on_site_time_cohort, x_batch_train_cohort,
+                                                       index_compare,0)
+
 
                     temporal_semantic_control, sample_sequence_batch_control, temporal_semantic_origin_control = \
                         self.extract_temporal_semantic(tcn_temporal_output_first_control,
-                                                       on_site_time_control, x_batch_train_control)
+                                                       on_site_time_control, x_batch_train_control,
+                                                       index_compare,0)
+
+                    self.check_temporal_semantic = temporal_semantic
+                    self.check_temporal_semantic_cohort = temporal_semantic_cohort
+                    self.check_temporal_semantic_origin = temporal_semantic_origin
 
                     y_batch_train = tf.expand_dims(y_batch_train,axis=1)
                     y_batch_train = tf.broadcast_to(y_batch_train,
@@ -1005,9 +1019,7 @@ class protatype_ehr():
                                                            temporal_semantic_origin.shape[2],
                                                            temporal_semantic_origin.shape[3]))
 
-                    self.check_temporal_semantic = temporal_semantic
-                    self.check_temporal_semantic_cohort = temporal_semantic_cohort
-                    self.check_temporal_semantic_origin = temporal_semantic_origin
+
 
                     temporal_semantic_reconstruct = tf.cast(temporal_semantic_reconstruct,tf.float64)
                     temporal_semantic_origin = tf.cast(temporal_semantic_origin,tf.float64)
