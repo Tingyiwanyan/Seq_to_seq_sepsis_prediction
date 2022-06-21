@@ -9,7 +9,7 @@ import numpy as np
 import random
 
 semantic_step_global = 6
-semantic_positive_sample = 1
+semantic_positive_sample = 4
 unsupervised_cluster_num = 10
 latent_dim_global = 100
 positive_sample_size = 10
@@ -134,8 +134,8 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
-        #file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
+        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -161,6 +161,10 @@ class protatype_ehr():
         with open(file_path + 'train_origin.npy', 'rb') as f:
             self.train_data_origin = np.load(f)
 
+
+        self.index_train = np.array(range(self.train_data.shape[0]))
+        self.extract_importance_temporal = np.zeros((self.train_data.shape[0],self.semantic_positive_sample))
+
         self.max_train_data = np.max(np.reshape(self.train_data,(self.train_data.shape[0]*self.train_data.shape[1],
                                                                  self.train_data.shape[2])),0)
         self.min_train_data = np.min(np.reshape(self.train_data,(self.train_data.shape[0]*self.train_data.shape[1],
@@ -179,7 +183,7 @@ class protatype_ehr():
                                                                 self.train_data.shape[2]))
 
         self.train_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.train_data, self.train_logit, self.train_on_site_time, self.train_data_norm))  # ,self.train_sofa_score))
+            (self.train_data, self.train_logit, self.train_on_site_time, self.train_data_norm,self.index_train))  # ,self.train_sofa_score))
         self.train_dataset = self.train_dataset.shuffle(buffer_size=1024).batch(self.batch_size)
         cohort_index = np.where(self.train_logit == 1)[0]
         control_index = np.where(self.train_logit == 0)[0]
@@ -849,7 +853,6 @@ class protatype_ehr():
         return model
 
 
-
     def train_standard(self):
         # input = layers.Input((self.time_sequence, self.feature_num))
         self.tcn = self.tcn_encoder_second_last_level()
@@ -924,10 +927,12 @@ class protatype_ehr():
             print("\nStart of epoch %d" % (epoch,))
 
 
-            for step, (x_batch_train, y_batch_train, on_site_time, semantic_origin) in enumerate(self.train_dataset):
+            for step, (x_batch_train, y_batch_train, on_site_time, semantic_origin, index_train) \
+                    in enumerate(self.train_dataset):
                 self.check_x_batch = x_batch_train
                 self.check_on_site_time = on_site_time
                 self.check_label = y_batch_train
+                self.check_index_train = index_train
 
                 random_indices_cohort = np.random.choice(self.num_cohort, size=x_batch_train.shape[0], replace=False)
                 random_indices_control = np.random.choice(self.num_control, size=x_batch_train.shape[0], replace=False)
