@@ -181,7 +181,7 @@ class protatype_ehr():
                                                                 self.train_data.shape[2]))
 
         self.train_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.train_data, self.train_logit, self.train_on_site_time, self.train_data_norm,self.index_train))  # ,self.train_sofa_score))
+            (self.train_data_norm, self.train_logit, self.train_on_site_time, self.train_data_norm,self.index_train))  # ,self.train_sofa_score))
         self.train_dataset = self.train_dataset.shuffle(buffer_size=1024).batch(self.batch_size)
         cohort_index = np.where(self.train_logit == 1)[0]
         control_index = np.where(self.train_logit == 0)[0]
@@ -961,7 +961,7 @@ class protatype_ehr():
                     tcn_temporal_output_first_control = self.tcn_first(x_batch_train_control)[1]
                     #translation_vector =
 
-
+                    self.check_temporal_output_first = tcn_temporal_output_first
                     temporal_semantic, sample_sequence_batch, temporal_semantic_origin = \
                         self.extract_temporal_semantic(tcn_temporal_output_first, on_site_time,
                                                        x_batch_train,index_compare,1)
