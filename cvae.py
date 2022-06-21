@@ -1036,7 +1036,11 @@ class protatype_ehr():
                     self.check_cl_loss_temporal = cl_loss_temporal
                     self.check_cl_loss_batch = cl_loss_batch
 
-                    select_cl_loss = tf.reshape(cl_loss_batch,(self.batch_size,self.semantic_positive_sample))
+                    select_cl_loss = tf.reshape(cl_loss_batch,(self.batch_size,self.semantic_positive_sample+1))
+
+                    select_index_max = tf.math.argmax(select_cl_loss,1)
+                    self.check_select_index_max = select_index_max
+                    update_inportant_temporal = sample_sequence_batch
 
 
                     #if epoch < 2:
