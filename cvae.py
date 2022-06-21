@@ -953,6 +953,7 @@ class protatype_ehr():
                     temporal_semantic, sample_sequence_batch, temporal_semantic_origin = \
                         self.extract_temporal_semantic(tcn_temporal_output_first, on_site_time, x_batch_train)
 
+                    self.check_temporal_semantic = temporal_semantic
                     self.check_sample_sequence_batch = sample_sequence_batch
 
                     temporal_semantic_cohort, sample_sequence_batch_cohort, temporal_semantic_origin_cohort = \
