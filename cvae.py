@@ -426,7 +426,7 @@ class protatype_ehr():
 
             sample_sequence_batch[k, :] = sample_sequence
             sample_sequence = tf.cast(sample_sequence,tf.int32)
-            self.check_sample_sequence_ = sample_sequence
+            #self.check_sample_sequence_ = sample_sequence
 
             sample_sequence_origin = np.zeros((self.semantic_positive_sample,self.tcn_filter_size,
                                                x_batch_origin.shape[-1]))
@@ -951,6 +951,8 @@ class protatype_ehr():
 
                     temporal_semantic, sample_sequence_batch, temporal_semantic_origin = \
                         self.extract_temporal_semantic(tcn_temporal_output_first, on_site_time, x_batch_train)
+
+                    self.check_sample_sequence_batch = sample_sequence_batch
 
                     temporal_semantic_cohort, sample_sequence_batch_cohort, temporal_semantic_origin_cohort = \
                         self.extract_temporal_semantic(tcn_temporal_output_first_cohort,
