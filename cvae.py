@@ -161,14 +161,12 @@ class protatype_ehr():
         with open(file_path + 'train_origin.npy', 'rb') as f:
             self.train_data_origin = np.load(f)
 
-
-        self.index_train = np.array(range(self.train_data.shape[0]))
-        self.extract_importance_temporal = np.zeros((self.train_data.shape[0],self.semantic_positive_sample))
-
         self.max_train_data = np.max(np.reshape(self.train_data,(self.train_data.shape[0]*self.train_data.shape[1],
                                                                  self.train_data.shape[2])),0)
         self.min_train_data = np.min(np.reshape(self.train_data,(self.train_data.shape[0]*self.train_data.shape[1],
                                                                  self.train_data.shape[2])),0)
+
+        self.index_train = np.array(range(self.train_data.shape[0]))
 
         self.train_data_range = self.max_train_data - self.min_train_data
         for i in range(self.train_data_range.shape[0]):
@@ -277,9 +275,10 @@ class protatype_ehr():
         denominator = tf.math.add(positive_dot_prod_sum, negative_dot_prod_sum)
         nomalized_prob_log = tf.math.log(tf.math.divide(positive_dot_prod_sum, denominator))
         nomalized_prob_log = tf.reduce_sum(nomalized_prob_log,1)
+        loss_batch = tf.math.negative(nomalized_prob_log)
         loss = tf.math.negative(tf.reduce_mean(nomalized_prob_log, 0))
 
-        return loss
+        return loss,loss_batch
 
     def compute_positive_pair_progression(self, z, on_site_extract):
         z = tf.math.l2_normalize(z, axis=-1)
@@ -920,6 +919,8 @@ class protatype_ehr():
         self.deconv = self.first_lvl_resolution_deconv()
         # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
 
+        self.extract_importance_temporal = np.zeros(self.train_data.shape[0])
+
         for epoch in range(self.pre_train_epoch):
             input_translation = np.ones(self.latent_dim)
             if epoch > 0:
@@ -1009,8 +1010,11 @@ class protatype_ehr():
                     mse_loss = self.mseloss(temporal_semantic_reconstruct,temporal_semantic_origin)
 
 
-                    cl_loss_temporal = self.info_nce_loss(temporal_semantic,temporal_semantic_cohort,
+                    cl_loss_temporal,cl_loss_batch = self.info_nce_loss(temporal_semantic,temporal_semantic_cohort,
                                                           temporal_semantic_control, y_batch_train)
+
+                    self.check_cl_loss_temporal = cl_loss_temporal
+                    self.check_cl_loss_batch = cl_loss_batch
 
                     #if epoch < 2:
                     #if epoch == 0 or epoch % 2 == 0:
