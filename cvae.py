@@ -456,6 +456,7 @@ class protatype_ehr():
 
         self.check_temporal_semantic_previous = temporal_semantic
         temporal_semantic = tf.cast(tf.stack(temporal_semantic),tf.float64)
+        self.check_temporal_semantic_after = temporal_semantic
         temporal_semantic_origin = tf.cast(tf.stack(temporal_semantic_origin),tf.float64)
             #temporal_semantic[k, :, :] = sample_sequence_feature
             #temporal_semantic_origin[k, :, :] = sample_sequence_origin
