@@ -922,8 +922,8 @@ class protatype_ehr():
 
         for epoch in range(self.pre_train_epoch):
             input_translation = np.ones(self.latent_dim)
-            # if epoch > 1:
-            self.save_embedding_first_lvl(str(epoch))
+            if epoch > 0:
+                self.save_embedding_first_lvl(str(epoch))
             print("\nStart of epoch %d" % (epoch,))
 
 
