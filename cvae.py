@@ -1062,13 +1062,16 @@ class protatype_ehr():
 
                     select_cl_loss = tf.reshape(cl_loss_batch,(x_batch_train.shape[0],self.semantic_positive_sample+1))
                     select_cl_loss_offset = tf.concat([tf.zeros((x_batch_train.shape[0],self.semantic_positive_sample)),
-                                                       tf.expand_dims(0.1*tf.ones(x_batch_train.shape[0]),1)],1)
+                                                       tf.expand_dims(0.07*tf.ones(x_batch_train.shape[0]),1)],1)
                     self.check_select_cl_loss_offset = select_cl_loss_offset
                     self.check_select_cl_loss = select_cl_loss
 
                     select_cl_loss_ = tf.math.subtract(select_cl_loss,tf.cast(select_cl_loss_offset,tf.float64))
                     self.check_select_cl_loss_minus = select_cl_loss_
-                    select_index_max = tf.math.argmin(select_cl_loss_,1)
+                    if epoch>0:
+                        select_index_max = tf.math.argmin(select_cl_loss_,1)
+                    else:
+                        select_index_max = tf.math.argmin(select_cl_loss, 1)
 
                     update_inportant_temporal = sample_sequence_batch
 
