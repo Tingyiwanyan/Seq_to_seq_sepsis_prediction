@@ -7,6 +7,7 @@ from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 import numpy as np
 import random
+import pandas as pd
 
 semantic_step_global = 6
 semantic_positive_sample = 4
@@ -67,7 +68,6 @@ class protatype_ehr():
                         4.60374699e+00, 1.64019340e+00, 1.68795640e+01, 6.23941196e+00,
                         1.75014175e+02, 1.03316340e+02]
 
-
         """
         define hyper-parameters
         """
@@ -81,7 +81,7 @@ class protatype_ehr():
         self.blood_length = 27
         self.epoch = 20
         self.feature_num = 34
-        self.pre_train_epoch = 6
+        self.pre_train_epoch = 20
         self.latent_dim = latent_dim_global
         self.tau = 1
         self.time_sequence = 48#self.read_d.time_sequence
@@ -134,8 +134,8 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
-        file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
+        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        #file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -177,6 +177,7 @@ class protatype_ehr():
                                            (self.train_data.shape[0]*self.train_data.shape[1],
                                                                  self.train_data.shape[2])) - self.min_train_data)\
                                /self.train_data_range
+
         self.train_data_norm = np.reshape(self.train_data_norm,(self.train_data.shape[0],self.train_data.shape[1],
                                                                 self.train_data.shape[2]))
 
@@ -651,12 +652,12 @@ class protatype_ehr():
         tcn_deconv2 = tf.keras.layers.Conv1DTranspose(self.latent_dim,kernal_size2,activation='relu',
                                            dilation_rate=dilation1)
 
-        conv2_identity = tf.keras.layers.Conv1D(self.feature_num, 1, activation='sigmoid',
-                                                dilation_rate=1)
+        #conv2_identity = tf.keras.layers.Conv1D(self.feature_num, 1, activation='sigmoid',
+                                                #dilation_rate=1)
         output_deconv2 = tcn_deconv2(output_deconv1)
-        output_deconv2 = conv2_identity(output_deconv2)
+        #output_deconv2 = conv2_identity(output_deconv2)
 
-        """
+
         kernal_size3 = dilation3*(self.tcn_filter_size-1)+output_deconv2.shape[1]
         kernal_size3 = kernal_size3 - output_deconv2.shape[1] + 1
 
@@ -675,10 +676,10 @@ class protatype_ehr():
 
         output_deconv4 = tcn_deconv4(output_deconv3)
         output_deconv4 = conv4_identity(output_deconv4)
-        """
+
 
         return tf.keras.Model(inputs,
-                              output_deconv2,
+                              output_deconv4,
                               name='tcn_deconv')
 
 
@@ -770,7 +771,8 @@ class protatype_ehr():
         """
         define dilation for each layer(24 hours)
         """
-        dilation1 = 1  # 3 hours
+        dilation1 = 1  #3 hours
+        dilation2 = 2  #7 hours
 
         """
         define the first tcn layer, dilation=1
@@ -788,9 +790,22 @@ class protatype_ehr():
         self.outputs1_first_lvl = conv1_identity(self.outputs1_first_lvl)
         # self.outputs1 = layernorm1(self.outputs1)
 
+        """
+        define the second tcn layer, dilation=2
+        """
+        tcn_conv2 = tf.keras.layers.Conv1D(self.latent_dim, self.tcn_filter_size, activation='relu',
+                                           dilation_rate=dilation2,
+                                           padding='valid')
+        conv2_identity = tf.keras.layers.Conv1D(self.latent_dim, 1, activation='relu',
+                                                dilation_rate=1)
+        layernorm2 = tf.keras.layers.BatchNormalization()
+        padding_2 = (self.tcn_filter_size - 1) * dilation2
+        inputs2 = tf.pad(self.outputs1_first_lvl, tf.constant([[0, 0], [1, 0], [0, 0]]) * padding_2)
+        self.outputs2 = tcn_conv2(inputs2)
+        self.outputs2 = conv2_identity(self.outputs2)
 
         return tf.keras.Model(inputs,
-                              [inputs, self.outputs1_first_lvl],
+                              [inputs, self.outputs2],
                               name='tcn_encoder_first_lvl')
 
     def lstm_split_multi(self):
@@ -854,7 +869,7 @@ class protatype_ehr():
                     self.latent_dim,
                     use_bias=True,
                     kernel_initializer=tf.keras.initializers.he_normal(seed=None),
-                    activation='relu'
+                    activation='sigmoid'
                 )
             ],
             name="transition_projection",
@@ -929,22 +944,31 @@ class protatype_ehr():
         self.deconv = self.first_lvl_resolution_deconv()
         # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
 
-        self.extract_importance_temporal = np.zeros(self.train_data.shape[0])
+        extract_importance_temporal = np.zeros(self.train_data.shape[0])
 
+        extract_compare = np.ones(self.train_data.shape[0])
         for epoch in range(self.pre_train_epoch):
-            input_translation = np.ones(self.latent_dim)
-            if epoch > 0:
-                self.save_embedding_first_lvl(str(epoch))
+            #input_translation = np.ones(self.latent_dim)
+            #if epoch > 0:
+                #self.save_embedding_first_lvl(str(epoch))
             print("\nStart of epoch %d" % (epoch,))
-
-
+            compare = extract_compare- extract_importance_temporal
+            self.check_extract_compare = extract_compare
+            self.extract_importance_temporal = extract_importance_temporal
+            self.num_compare = np.where(compare!=0)[0].shape
+            print("num different is")
+            print(self.num_compare)
+            for i in range(self.train_data.shape[0]):
+                extract_compare[i] = extract_importance_temporal[i]
             for step, (x_batch_train, y_batch_train, on_site_time, semantic_origin, index_train) \
                     in enumerate(self.train_dataset):
+                #if step > 20:
+                    #continue
                 self.check_x_batch = x_batch_train
                 self.check_on_site_time = on_site_time
                 self.check_label = y_batch_train
                 self.check_index_train = index_train
-                index_compare = [self.extract_importance_temporal[i] for i in index_train]
+                index_compare = [extract_importance_temporal[i] for i in index_train]
                 self.check_index_compare = index_compare
 
                 random_indices_cohort = np.random.choice(self.num_cohort, size=x_batch_train.shape[0], replace=False)
@@ -1021,11 +1045,11 @@ class protatype_ehr():
 
 
 
-                    temporal_semantic_reconstruct = tf.cast(temporal_semantic_reconstruct,tf.float64)
-                    temporal_semantic_origin = tf.cast(temporal_semantic_origin,tf.float64)
+                    #temporal_semantic_reconstruct = tf.cast(temporal_semantic_reconstruct,tf.float64)
+                    #temporal_semantic_origin = tf.cast(temporal_semantic_origin,tf.float64)
                     #temporal_semantic = tf.cast(temporal_semantic,tf.float32)
 
-                    mse_loss = self.mseloss(temporal_semantic_reconstruct,temporal_semantic_origin)
+                    #mse_loss = self.mseloss(temporal_semantic_reconstruct,temporal_semantic_origin)
 
 
                     cl_loss_temporal,cl_loss_batch = self.info_nce_loss(temporal_semantic,temporal_semantic_cohort,
@@ -1036,16 +1060,31 @@ class protatype_ehr():
                     self.check_cl_loss_temporal = cl_loss_temporal
                     self.check_cl_loss_batch = cl_loss_batch
 
-                    select_cl_loss = tf.reshape(cl_loss_batch,(self.batch_size,self.semantic_positive_sample+1))
+                    select_cl_loss = tf.reshape(cl_loss_batch,(x_batch_train.shape[0],self.semantic_positive_sample+1))
 
-                    select_index_max = tf.math.argmax(select_cl_loss,1)
-                    self.check_select_index_max = select_index_max
+                    self.check_select_cl_loss = select_cl_loss
+                    select_index_max = tf.math.argmin(select_cl_loss,1)
+
                     update_inportant_temporal = sample_sequence_batch
 
+                    range_batch = tf.convert_to_tensor(range(select_cl_loss.shape[0]))
+                    select_index_max = tf.stack((tf.cast(range_batch,tf.int64),select_index_max),axis=1)
 
+                    self.check_select_index_max = select_index_max
+
+                    cl_loss_temporal_final = tf.gather_nd(select_cl_loss,select_index_max)
+                    self.check_cl_loss_temporal_final = cl_loss_temporal_final
+
+                    update_important_temporal = tf.gather_nd(sample_sequence_batch,select_index_max)
+                    self.check_update_important_temporal = update_important_temporal
+                    for j in range(index_train.shape[0]):
+                        index = index_train[j]
+                        extract_importance_temporal[index] = update_important_temporal[j]
+
+                    cl_loss_temporal_mean = tf.reduce_mean(cl_loss_temporal_final)
                     #if epoch < 2:
                     #if epoch == 0 or epoch % 2 == 0:
-                    loss = cl_loss_temporal+mse_loss
+                    loss = cl_loss_temporal_mean
 
                     #if epoch % 2 == 1:
                         #loss =progression_loss
@@ -1053,13 +1092,12 @@ class protatype_ehr():
                 #if epoch == 0 or epoch % 2 == 0:
                 gradients = \
                     tape.gradient(loss,
-                                  self.tcn_first.trainable_variables+self.deconv.trainable_variables
-                                  +self.transition_layer.trainable_variables)
+                                  self.tcn_first.trainable_variables+self.transition_layer.trainable_variables)
                                   #+self.deconv.trainable_variables)
                 optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
                 optimizer.apply_gradients(zip(gradients,
-                                              self.tcn_first.trainable_variables+self.deconv.trainable_variables
+                                              self.tcn_first.trainable_variables
                                               +self.transition_layer.trainable_variables))
                 #if epoch % 2 == 1:
                  #   gradients = \
@@ -1072,9 +1110,13 @@ class protatype_ehr():
                     #if epoch == 0 or epoch % 2 == 0:
                     print("Training cl_loss_temporal(for one batch) at step %d: %.4f"
                           % (step, float(cl_loss_temporal)))
-                    print("Training mse_loss(for one batch) at step %d: %.4f"
-                          % (step, float(mse_loss)))
+                    #print("Training mse_loss(for one batch) at step %d: %.4f"
+                     #     % (step, float(mse_loss)))
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
+                    #compare = extract_compare - extract_importance_temporal
+                    #num_compare = np.where(compare != 0)[0].shape
+                    #print("num different is")
+                    #print(num_compare)
 
                     self.loss_track.append(loss)
 
@@ -1149,7 +1191,7 @@ class protatype_ehr():
                 on_site_time_cohort = self.memory_bank_cohort_on_site[random_indices_cohort]
                 on_site_time_control = self.memory_bank_control_on_site[random_indices_control]
 
-                batch_resolution_reconstruct = self.extract_reconstruction_resolution(on_site_time,semantic_origin,7)
+                batch_resolution_reconstruct = self.extract_reconstruction_resolution(on_site_time,semantic_origin,31)
                 self.check_batch_resolution_reconstruct = batch_resolution_reconstruct
 
 
@@ -1279,6 +1321,20 @@ class protatype_ehr():
         self.center_temporal_cohort_on_site = tf.reduce_mean(self.temporal_cohort_on_site,0)
         self.center_temporal_control_on_site = tf.reduce_mean(self.temporal_control_on_site,0)
 
+        self.reconstruct_cohort = self.deconv_whole(tf.expand_dims(tf.expand_dims(self.center_temporal_cohort_on_site,0),0))[0]
+        self.reconstruct_control = self.deconv_whole(tf.expand_dims(tf.expand_dims(self.center_temporal_control_on_site,0),0))[0]
+
+        self.reconstruct_cohort = self.reconstruct_cohort*self.train_data_range+self.min_train_data
+        self.reconstruct_cohort = self.reconstruct_cohort*self.std_all+self.ave_all
+
+        self.reconstruct_control = self.reconstruct_control*self.train_data_range+self.min_train_data
+        self.reconstruct_control = self.reconstruct_control*self.std_all+self.ave_all
+
+        self.df_cohort = pd.DataFrame(np.transpose(np.array(self.reconstruct_cohort)))
+        self.df_control = pd.DataFrame(np.transpose(np.array(self.reconstruct_control)))
+        self.df_cohort.to_csv('df_cohort.csv',seq='\t')
+        self.df_control.to_csv('df_control.csv',seq='\t')
+
         self.temporal_semantic_cohort, sample_sequence_batch_cohort, temporal_semantic_origin_cohort = \
             self.extract_temporal_semantic(temporal_cohort_1_lvl_resolution,
                                            on_site_time_cohort, self.memory_bank_cohort)
@@ -1336,7 +1392,8 @@ class protatype_ehr():
 
         #output_1h_resolution_whole = self.tcn(self.train_data)[4]
         temporal_semantic_whole, sample_sequence_batch_whole, temporal_semantic_origin_whole = \
-            self.extract_temporal_semantic(output_1h_resolution_whole, self.train_on_site_time, self.train_data)
+            self.extract_temporal_semantic(output_1h_resolution_whole, self.train_on_site_time, self.train_data,
+                                           self.index_train,0)
 
         temporal_semantic_whole = tf.squeeze(temporal_semantic_whole)
         #temporal_semantic_whole_transit = self.transition_layer(temporal_semantic_whole)
