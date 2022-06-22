@@ -7,9 +7,10 @@ from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 import numpy as np
 import random
+import pandas as pd
 
 semantic_step_global = 6
-semantic_positive_sample = 1
+semantic_positive_sample = 4
 unsupervised_cluster_num = 10
 latent_dim_global = 100
 positive_sample_size = 10
@@ -66,7 +67,6 @@ class protatype_ehr():
                         1.17084555e+00, 4.77914796e-01, 3.62933460e+00, 9.91058703e+00,
                         4.60374699e+00, 1.64019340e+00, 1.68795640e+01, 6.23941196e+00,
                         1.75014175e+02, 1.03316340e+02]
-
 
         """
         define hyper-parameters
@@ -175,6 +175,7 @@ class protatype_ehr():
                                            (self.train_data.shape[0]*self.train_data.shape[1],
                                                                  self.train_data.shape[2])) - self.min_train_data)\
                                /self.train_data_range
+
         self.train_data_norm = np.reshape(self.train_data_norm,(self.train_data.shape[0],self.train_data.shape[1],
                                                                 self.train_data.shape[2]))
 
@@ -638,12 +639,12 @@ class protatype_ehr():
         tcn_deconv2 = tf.keras.layers.Conv1DTranspose(self.latent_dim,kernal_size2,activation='relu',
                                            dilation_rate=dilation1)
 
-        conv2_identity = tf.keras.layers.Conv1D(self.feature_num, 1, activation='sigmoid',
-                                                dilation_rate=1)
+        #conv2_identity = tf.keras.layers.Conv1D(self.feature_num, 1, activation='sigmoid',
+                                                #dilation_rate=1)
         output_deconv2 = tcn_deconv2(output_deconv1)
-        output_deconv2 = conv2_identity(output_deconv2)
+        #output_deconv2 = conv2_identity(output_deconv2)
 
-        """
+
         kernal_size3 = dilation3*(self.tcn_filter_size-1)+output_deconv2.shape[1]
         kernal_size3 = kernal_size3 - output_deconv2.shape[1] + 1
 
@@ -662,10 +663,10 @@ class protatype_ehr():
 
         output_deconv4 = tcn_deconv4(output_deconv3)
         output_deconv4 = conv4_identity(output_deconv4)
-        """
+
 
         return tf.keras.Model(inputs,
-                              output_deconv2,
+                              output_deconv4,
                               name='tcn_deconv')
 
 
@@ -999,7 +1000,7 @@ class protatype_ehr():
                     temporal_semantic_origin = tf.cast(temporal_semantic_origin,tf.float64)
                     #temporal_semantic = tf.cast(temporal_semantic,tf.float32)
 
-                    mse_loss = self.mseloss(temporal_semantic_reconstruct,temporal_semantic_origin)
+                    #mse_loss = self.mseloss(temporal_semantic_reconstruct,temporal_semantic_origin)
 
 
                     cl_loss_temporal = self.info_nce_loss(temporal_semantic,temporal_semantic_cohort,
@@ -1015,14 +1016,14 @@ class protatype_ehr():
                 #if epoch == 0 or epoch % 2 == 0:
                 gradients = \
                     tape.gradient(loss,
-                                  self.tcn_first.trainable_variables+self.deconv.trainable_variables
-                                  +self.transition_layer.trainable_variables)
+                                  self.tcn_first.trainable_variables)#+self.deconv.trainable_variables
+                                  #+self.transition_layer.trainable_variables)
                                   #+self.deconv.trainable_variables)
                 optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
                 optimizer.apply_gradients(zip(gradients,
-                                              self.tcn_first.trainable_variables+self.deconv.trainable_variables
-                                              +self.transition_layer.trainable_variables))
+                                              self.tcn_first.trainable_variables)#+self.deconv.trainable_variables
+                                              #+self.transition_layer.trainable_variables))
                 #if epoch % 2 == 1:
                  #   gradients = \
                   #      tape.gradient(loss, self.transition_layer.trainable_variables)
@@ -1034,8 +1035,8 @@ class protatype_ehr():
                     #if epoch == 0 or epoch % 2 == 0:
                     print("Training cl_loss_temporal(for one batch) at step %d: %.4f"
                           % (step, float(cl_loss_temporal)))
-                    print("Training mse_loss(for one batch) at step %d: %.4f"
-                          % (step, float(mse_loss)))
+                    #print("Training mse_loss(for one batch) at step %d: %.4f"
+                     #     % (step, float(mse_loss)))
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
 
                     self.loss_track.append(loss)
@@ -1111,7 +1112,7 @@ class protatype_ehr():
                 on_site_time_cohort = self.memory_bank_cohort_on_site[random_indices_cohort]
                 on_site_time_control = self.memory_bank_control_on_site[random_indices_control]
 
-                batch_resolution_reconstruct = self.extract_reconstruction_resolution(on_site_time,semantic_origin,7)
+                batch_resolution_reconstruct = self.extract_reconstruction_resolution(on_site_time,semantic_origin,31)
                 self.check_batch_resolution_reconstruct = batch_resolution_reconstruct
 
 
@@ -1240,6 +1241,20 @@ class protatype_ehr():
 
         self.center_temporal_cohort_on_site = tf.reduce_mean(self.temporal_cohort_on_site,0)
         self.center_temporal_control_on_site = tf.reduce_mean(self.temporal_control_on_site,0)
+
+        self.reconstruct_cohort = self.deconv_whole(tf.expand_dims(tf.expand_dims(self.center_temporal_cohort_on_site,0),0))[0]
+        self.reconstruct_control = self.deconv_whole(tf.expand_dims(tf.expand_dims(self.center_temporal_control_on_site,0),0))[0]
+
+        self.reconstruct_cohort = self.reconstruct_cohort*self.train_data_range+self.min_train_data
+        self.reconstruct_cohort = self.reconstruct_cohort*self.std_all+self.ave_all
+
+        self.reconstruct_control = self.reconstruct_control*self.train_data_range+self.min_train_data
+        self.reconstruct_control = self.reconstruct_control*self.std_all+self.ave_all
+
+        self.df_cohort = pd.DataFrame(np.transpose(np.array(self.reconstruct_cohort)))
+        self.df_control = pd.DataFrame(np.transpose(np.array(self.reconstruct_control)))
+        self.df_cohort.to_csv('df_cohort.csv',seq='\t')
+        self.df_control.to_csv('df_control.csv',seq='\t')
 
         self.temporal_semantic_cohort, sample_sequence_batch_cohort, temporal_semantic_origin_cohort = \
             self.extract_temporal_semantic(temporal_cohort_1_lvl_resolution,
