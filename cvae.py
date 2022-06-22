@@ -81,7 +81,7 @@ class protatype_ehr():
         self.blood_length = 27
         self.epoch = 20
         self.feature_num = 34
-        self.pre_train_epoch = 20
+        self.pre_train_epoch = 7
         self.latent_dim = latent_dim_global
         self.tau = 1
         self.time_sequence = 48#self.read_d.time_sequence
