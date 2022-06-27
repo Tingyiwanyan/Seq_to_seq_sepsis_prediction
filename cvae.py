@@ -134,8 +134,8 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
-        #file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
+        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        file_path = '/athena/penglab/scratch/tiw4003/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -793,6 +793,7 @@ class protatype_ehr():
         """
         define the second tcn layer, dilation=2
         """
+        """
         tcn_conv2 = tf.keras.layers.Conv1D(self.latent_dim, self.tcn_filter_size, activation='relu',
                                            dilation_rate=dilation2,
                                            padding='valid')
@@ -803,9 +804,9 @@ class protatype_ehr():
         inputs2 = tf.pad(self.outputs1_first_lvl, tf.constant([[0, 0], [1, 0], [0, 0]]) * padding_2)
         self.outputs2 = tcn_conv2(inputs2)
         self.outputs2 = conv2_identity(self.outputs2)
-
+        """
         return tf.keras.Model(inputs,
-                              [inputs, self.outputs2],
+                              [inputs, self.outputs1_first_lvl],
                               name='tcn_encoder_first_lvl')
 
     def lstm_split_multi(self):
@@ -945,6 +946,7 @@ class protatype_ehr():
         # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
 
         extract_importance_temporal = np.zeros(self.train_data.shape[0])
+        self.original_extract_signal = np.zeros(self.train_data.shape[0],self.train_data.shape[2])
 
         extract_compare = np.ones(self.train_data.shape[0])
         for epoch in range(self.pre_train_epoch):
