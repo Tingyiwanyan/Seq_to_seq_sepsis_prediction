@@ -946,7 +946,7 @@ class protatype_ehr():
         # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
 
         extract_importance_temporal = np.zeros(self.train_data.shape[0])
-        self.original_extract_signal = np.zeros(self.train_data.shape[0],self.train_data.shape[2])
+        self.original_extract_signal = np.zeros((self.train_data.shape[0],self.train_data.shape[2]))
 
         extract_compare = np.ones(self.train_data.shape[0])
         for epoch in range(self.pre_train_epoch):
