@@ -38,8 +38,8 @@ class load_embeddings:
                         4.60374699e+00, 1.64019340e+00, 1.68795640e+01, 6.23941196e+00,
                         1.75014175e+02, 1.03316340e+02]
 
-        #with open('on_site_embedding4.npy', 'rb') as f:
-         #   self.on_site_embedding = np.load(f)
+        with open('temporal_semantic_embedding.npy', 'rb') as f:
+            self.on_site_embedding = np.load(f)
         with open('on_site_logit.npy', 'rb') as f:
             self.on_site_logit = np.load(f)
         with open('temporal_semantic_embedding_cohort.npy','rb') as f:
@@ -81,12 +81,12 @@ class load_embeddings:
     def vis_embedding_load(self):
         #CL_k = TSNE(n_components=2).fit_transform(np.array(self.on_site_embedding)[0:5000, :])
         self.vis_embedding_on_site = np.array(self.on_site_embedding)[0:5000,:]
-        self.vis_embedding_on_site = np.concatenate((self.vis_embedding_on_site,
-                                                                self.center_cohort_on_site),
-                                                               axis=0)
-        self.vis_embedding_on_site = np.concatenate((self.vis_embedding_on_site,
-                                                     self.center_control_on_site),
-                                                    axis=0)
+        #self.vis_embedding_on_site = np.concatenate((self.vis_embedding_on_site,
+         #                                                       self.center_cohort_on_site),
+          #                                                     axis=0)
+        #self.vis_embedding_on_site = np.concatenate((self.vis_embedding_on_site,
+         #                                            self.center_control_on_site),
+          #                                          axis=0)
 
         CL_k = umap.UMAP().fit_transform(self.vis_embedding_on_site)
         for i in range(5000):
@@ -95,8 +95,8 @@ class load_embeddings:
             if self.on_site_logit[i] == 1:
                 plt.plot(CL_k[i][0], CL_k[i][1], 'o', color='red', markersize=5)
 
-        plt.plot(CL_k[-2][0], CL_k[-2][1], 'o', color='yellow', markersize=9)
-        plt.plot(CL_k[-1][0], CL_k[-1][1], 'o', color='green', markersize=9)
+        #plt.plot(CL_k[-2][0], CL_k[-2][1], 'o', color='yellow', markersize=9)
+        #plt.plot(CL_k[-1][0], CL_k[-1][1], 'o', color='green', markersize=9)
 
         plt.show()
 
