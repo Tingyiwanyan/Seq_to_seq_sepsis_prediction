@@ -16,6 +16,7 @@ latent_dim_global = 100
 positive_sample_size = 10
 batch_size = 128
 unsupervised_neg_size = 5
+reconstruct_resolution = 7
 
 
 class projection(keras.layers.Layer):
@@ -76,6 +77,7 @@ class protatype_ehr():
         self.batch_size = batch_size
         self.neg_size = self.batch_size
         self.pos_size = positive_sample_size
+        self.reconstruct_resolution = reconstruct_resolution
         self.vital_length = 8
         self.lab_length = 19
         self.blood_length = 27
@@ -435,22 +437,22 @@ class protatype_ehr():
                 origin_num = self.semantic_positive_sample+1
             else:
                 origin_num = self.semantic_positive_sample
-            sample_sequence_origin = np.zeros((origin_num,self.tcn_filter_size,
+            sample_sequence_origin = np.zeros((origin_num,self.reconstruct_resolution,
                                                x_batch_origin.shape[-1]))
             for j in range(origin_num):
                 #sample_sequence_feature[j, :] = x_batch_feature[k, int(sample_sequence[j]), :]
                 if int(sample_sequence[j])==0:
                     sample_sequence_origin[j,:,:] = x_batch_origin[k,0,:]
-                elif int(sample_sequence[j])<self.tcn_filter_size:
-                    compensate = self.tcn_filter_size - int(sample_sequence[j]) - 1
-                    for jj in range(self.tcn_filter_size):
+                elif int(sample_sequence[j])<self.reconstruct_resolution:
+                    compensate = self.reconstruct_resolution - int(sample_sequence[j]) - 1
+                    for jj in range(self.reconstruct_resolution):
                         if jj < compensate:
                             sample_sequence_origin[j,jj,:] = x_batch_origin[k,0,:]
                         else:
                             sample_sequence_origin[j,jj,:] = x_batch_origin[k,jj-compensate,:]
                 else:
-                    compensate = int(sample_sequence[j]) - self.tcn_filter_size + 1
-                    for jj in range(self.tcn_filter_size):
+                    compensate = int(sample_sequence[j]) - self.reconstruct_resolution + 1
+                    for jj in range(self.reconstruct_resolution):
                         sample_sequence_origin[j,jj,:] = x_batch_origin[k,jj+compensate,:]
 
                 #sample_sequence_origin[j, :,:] = x_batch_origin[k, int(sample_sequence[j]), :]
@@ -793,7 +795,7 @@ class protatype_ehr():
         """
         define the second tcn layer, dilation=2
         """
-        """
+
         tcn_conv2 = tf.keras.layers.Conv1D(self.latent_dim, self.tcn_filter_size, activation='relu',
                                            dilation_rate=dilation2,
                                            padding='valid')
@@ -804,9 +806,9 @@ class protatype_ehr():
         inputs2 = tf.pad(self.outputs1_first_lvl, tf.constant([[0, 0], [1, 0], [0, 0]]) * padding_2)
         self.outputs2 = tcn_conv2(inputs2)
         self.outputs2 = conv2_identity(self.outputs2)
-        """
+
         return tf.keras.Model(inputs,
-                              [inputs, self.outputs1_first_lvl],
+                              [inputs, self.outputs2],
                               name='tcn_encoder_first_lvl')
 
     def lstm_split_multi(self):
@@ -836,7 +838,7 @@ class protatype_ehr():
                     self.latent_dim,
                     # use_bias=False,
                     kernel_initializer=tf.keras.initializers.he_normal(seed=None),
-                    activation='relu'
+                    activation='sigmoid'
                 )
             ],
             name="translation_layer",
@@ -946,7 +948,7 @@ class protatype_ehr():
         # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
 
         extract_importance_temporal = np.zeros(self.train_data.shape[0])
-        self.original_extract_signal = np.zeros((self.train_data.shape[0],self.train_data.shape[2]))
+        #self.original_extract_signal = np.zeros((self.train_data.shape[0],self.train_data.shape[2]))
 
         extract_compare = np.ones(self.train_data.shape[0])
         for epoch in range(self.pre_train_epoch):
@@ -1008,6 +1010,8 @@ class protatype_ehr():
                     self.check_temporal_semantic = temporal_semantic
                     self.check_temporal_semantic_cohort = temporal_semantic_cohort
                     self.check_temporal_semantic_origin = temporal_semantic_origin
+
+
 
                     y_batch_train = tf.expand_dims(y_batch_train,axis=1)
                     y_batch_train = tf.broadcast_to(y_batch_train,
@@ -1075,7 +1079,7 @@ class protatype_ehr():
                     else:
                         select_index_max = tf.math.argmin(select_cl_loss, 1)
 
-                    update_inportant_temporal = sample_sequence_batch
+                    #update_inportant_temporal = sample_sequence_batch
 
                     range_batch = tf.convert_to_tensor(range(select_cl_loss.shape[0]))
                     select_index_max = tf.stack((tf.cast(range_batch,tf.int64),select_index_max),axis=1)
@@ -1090,6 +1094,7 @@ class protatype_ehr():
                     for j in range(index_train.shape[0]):
                         index = index_train[j]
                         extract_importance_temporal[index] = update_important_temporal[j]
+                        #self.original_extract_signal[index] = temporal_semantic_origin[j]
 
                     cl_loss_temporal_mean = tf.reduce_mean(cl_loss_temporal_final)
                     #if epoch < 2:
@@ -1285,26 +1290,46 @@ class protatype_ehr():
 
 
     def reconstruct_signal_first_lvl(self):
-        temporal_cohort_1_lvl_resolution = self.tcn_first(self.memory_bank_cohort)[1]
-        temporal_control_1_lvl_resolution = self.tcn_first(self.memory_bank_control)[1]
-        on_site_time_cohort = self.memory_bank_cohort_on_site
-        on_site_time_control = self.memory_bank_control_on_site
+        #temporal_cohort_1_lvl_resolution = self.tcn_first(self.memory_bank_cohort)[1]
+        #temporal_control_1_lvl_resolution = self.tcn_first(self.memory_bank_control)[1]
+        temporal_1_lvl_embedding = self.tcn_first(self.train_data)[1]
+        on_site_time = self.train_on_site_time
+        #on_site_time_cohort = self.memory_bank_cohort_on_site
+        #on_site_time_control = self.memory_bank_control_on_site
 
-        self.temporal_semantic_cohort, sample_sequence_batch_cohort, temporal_semantic_origin_cohort = \
-            self.extract_temporal_semantic(temporal_cohort_1_lvl_resolution,
-                                           on_site_time_cohort, self.memory_bank_cohort)
+        #self.temporal_semantic_cohort, sample_sequence_batch_cohort, temporal_semantic_origin_cohort = \
+         #   self.extract_temporal_semantic(temporal_cohort_1_lvl_resolution,
+          #                                 on_site_time_cohort, self.memory_bank_cohort)
 
-        self.temporal_semantic_control, sample_sequence_batch_control, temporal_semantic_origin_control = \
-            self.extract_temporal_semantic(temporal_control_1_lvl_resolution,
-                                           on_site_time_control, self.memory_bank_control)
+        temporal_semantic_whole, sample_sequence_batch, temporal_semantic_origin = \
+            self.extract_temporal_semantic(temporal_1_lvl_embedding, on_site_time,
+                                           self.train_data_origin, self.check_extract_compare, 1)
 
-        self.temporal_semantic_cohort = tf.math.l2_normalize(tf.squeeze(self.temporal_semantic_cohort),axis=-1)
-        self.temporal_semantic_control = tf.math.l2_normalize(tf.squeeze(self.temporal_semantic_control),axis=-1)
+        #self.temporal_semantic_control, sample_sequence_batch_control, temporal_semantic_origin_control = \
+         #   self.extract_temporal_semantic(temporal_control_1_lvl_resolution,
+          #                                 on_site_time_control, self.memory_bank_control)
+        self.temporal_semantic_whole = tf.math.l2_normalize(temporal_semantic_whole[:,-1,:],axis=-1)
+        self.temporal_semantic_origin = temporal_semantic_origin[:,-1,:,:]
+        self.index_cohorts = np.where(self.train_logit==1)[0]
+        self.index_controls = np.where(self.train_logit==0)[0]
+
+        self.temporal_semantic_cohort = tf.gather(self.temporal_semantic_whole,self.index_cohorts)
+        self.temporal_semantic_control = tf.gather(self.temporal_semantic_whole,self.index_controls)
+        self.temporal_semantic_cohort_origin = tf.gather(self.temporal_semantic_origin,self.index_cohorts)
+        self.temporal_semantic_control_origin = tf.gather(self.temporal_semantic_origin,self.index_controls)
+        #self.temporal_semantic_cohort = tf.math.l2_normalize(tf.squeeze(self.temporal_semantic_cohort),axis=-1)
+        #self.temporal_semantic_control = tf.math.l2_normalize(tf.squeeze(self.temporal_semantic_control),axis=-1)
 
         with open('temporal_semantic_embedding_cohort.npy','wb') as f:
             np.save(f,self.temporal_semantic_cohort)
         with open('temporal_semantic_embedding_control.npy','wb') as f:
             np.save(f,self.temporal_semantic_control)
+        with open('temporal_semantic_origin_cohort.npy','wb') as f:
+            np.save(f, self.temporal_semantic_cohort_origin)
+        with open('temporal_semantic_origin_control.npy','wb') as f:
+            np.save(f, self.temporal_semantic_control_origin)
+        with open('on_site_logit.npy','wb') as f:
+            np.save(f,self.train_logit)
 
 
     def reconstruct_signal(self):
