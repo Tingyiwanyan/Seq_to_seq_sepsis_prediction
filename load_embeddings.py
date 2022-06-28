@@ -38,17 +38,17 @@ class load_embeddings:
                         4.60374699e+00, 1.64019340e+00, 1.68795640e+01, 6.23941196e+00,
                         1.75014175e+02, 1.03316340e+02]
 
-        with open('on_site_embedding4.npy', 'rb') as f:
-            self.on_site_embedding = np.load(f)
-        with open('on_site_logit4.npy', 'rb') as f:
+        #with open('on_site_embedding4.npy', 'rb') as f:
+         #   self.on_site_embedding = np.load(f)
+        with open('on_site_logit.npy', 'rb') as f:
             self.on_site_logit = np.load(f)
         with open('temporal_semantic_embedding_cohort.npy','rb') as f:
             self.on_site_embedding_cohort = np.load(f)
         with open('temporal_semantic_embedding_control.npy','rb') as f:
             self.on_site_embedding_control = np.load(f)
-        with open('exiting_reconstruct_cohort.npy','rb') as f:
+        with open('temporal_semantic_origin_cohort.npy','rb') as f:
             self.reconstruct_cohort = np.load(f)
-        with open('exiting_reconstruct_control.npy','rb') as f:
+        with open('temporal_semantic_origin_control.npy','rb') as f:
             self.reconstruct_control = np.load(f)
         #with open('temporal_semantic_embedding5.npy', 'rb') as f:
          #   self.temporal_semantic_embedding = np.load(f)

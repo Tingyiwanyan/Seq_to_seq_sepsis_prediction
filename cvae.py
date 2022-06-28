@@ -1320,6 +1320,9 @@ class protatype_ehr():
         #self.temporal_semantic_cohort = tf.math.l2_normalize(tf.squeeze(self.temporal_semantic_cohort),axis=-1)
         #self.temporal_semantic_control = tf.math.l2_normalize(tf.squeeze(self.temporal_semantic_control),axis=-1)
 
+
+        with open('temporal_semantic_embedding.npy','wb') as f:
+            np.save(f,self.temporal_semantic_whole)
         with open('temporal_semantic_embedding_cohort.npy','wb') as f:
             np.save(f,self.temporal_semantic_cohort)
         with open('temporal_semantic_embedding_control.npy','wb') as f:
