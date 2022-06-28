@@ -135,7 +135,7 @@ class protatype_ehr():
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
         #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
-        file_path = '/prj0129/tiw4003/Interpolate_data'
+        file_path = '/prj0129/tiw4003/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
