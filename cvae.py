@@ -17,11 +17,45 @@ positive_sample_size = 10
 batch_size = 128
 unsupervised_neg_size = 5
 reconstruct_resolution = 7
+feature_num = 34
 
+"""
+class projection_temporal(keras.layers.Layer):
+    def __init__(self, units=feature_num, input_dim=[feature_num,1]):
+        super(projection_temporal, self).__init__()
+        w_init = tf.random_normal_initializer()
+        #w_init = tf.keras.initializers.Orthogonal()
+        self.w = tf.Variable(
+            initial_value=w_init(shape=(units, latent_dim_global), dtype="float32"),
+            trainable=True,
+        )
+        # b_init = tf.zeros_initializer()
+        # self.b = tf.Variable(
+        # initial_value=b_init(shape=(units,), dtype="float32"), trainable=True
+        # )
 
-class projection(keras.layers.Layer):
-    def __init__(self, units=unsupervised_cluster_num, input_dim=latent_dim_global):
-        super(projection, self).__init__()
+    def call(self, inputs):
+        return tf.math.multiply(inputs, self.w)
+"""
+
+class projection_temporal(keras.layers.Layer):
+
+   def __init__(self, output_dim, **kwargs):
+      self.output_dim = output_dim
+      super(projection_temporal, self).__init__(**kwargs)
+
+   def build(self, input_shape):
+        self.kernel = self.add_weight(name = 'kernel', shape = (input_shape[1], self.output_dim),
+                                      initializer = 'normal', trainable = True)
+        #super(projection_temporal, self).build(input_shape)
+
+   def call(self, input_data):
+       return tf.math.multiply(input_data, self.kernel)
+
+"""
+class translation_temporal(keras.layers.Layer):
+    def __init__(self, units=feature_num, input_dim=latent_dim_global):
+        super(translation_temporal, self).__init__()
         w_init = tf.random_normal_initializer()
         #w_init = tf.keras.initializers.Orthogonal()
         self.w = tf.Variable(
@@ -34,13 +68,28 @@ class projection(keras.layers.Layer):
         # )
 
     def call(self, inputs):
-        return tf.math.multiply(inputs, self.w)
+        return tf.math.add(inputs, self.w)
+"""
+class translation_temporal(keras.layers.Layer):
+
+   def __init__(self, output_dim, **kwargs):
+      self.output_dim = output_dim
+      super(translation_temporal, self).__init__(**kwargs)
+
+   def build(self, input_shape):
+        self.kernel = self.add_weight(name = 'kernel', shape = (input_shape[1], self.output_dim),
+                                      initializer = 'normal', trainable = True)
+        #super(projection_temporal, self).build(input_shape)
+
+   def call(self, input_data):
+       return tf.math.add(input_data, self.kernel)
 
 
 class protatype_ehr():
-    def __init__(self, projection):
+    def __init__(self, projection, translation):
         #self.read_d = read_d
-        self.projection_model = projection
+        self.projection_model = projection(latent_dim_global)
+        self.relation_layer = translation(latent_dim_global)
         #self.train_data = read_d.train_data
         #self.test_data = read_d.test_data
         #self.validate_data = read_d.val_data
@@ -136,8 +185,8 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
-        file_path = '/prj0129/tiw4003/Interpolate_data/'
+        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        #file_path = '/prj0129/tiw4003/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -683,6 +732,61 @@ class protatype_ehr():
         return tf.keras.Model(inputs,
                               output_deconv4,
                               name='tcn_deconv')
+
+    def temporal_progression_model(self):
+        #init_relation_value = tf.random.normal(shape=(self.feature_num,self.latent_dim))
+        #init_projection_weight = tf.random.normal(shape=(self.feature_num,self.latent_dim))
+        #relation_layer = tf.Variable(init_relation_value)
+        #relation_layer = translation_temporal(self.latent_dim)
+        #projection_layer = tf.Variable(init_projection_weight)
+        #projection_layer = projection_temporal(self.latent_dim)
+        #self.check_projection_layer = projection_layer
+        inputs = layers.Input((self.time_sequence, self.feature_num))
+        inputs = tf.expand_dims(inputs,axis=3)
+        self.check_in = inputs
+        #inputs = tf.broadcast_to(inputs,shape=[inputs.shape[0],inputs.shape[1],inputs.shape[2],self.latent_dim])
+        conv_layers_outputs = []
+        attention_outputs = []
+        self.check_att_output = attention_outputs
+        self.check_conv_layer_output = conv_layers_outputs
+        soft_max_layer = tf.keras.layers.Softmax()
+        conv_identity = tf.keras.layers.Conv1D(self.latent_dim, 1, activation='relu', dilation_rate=1)
+        for i in range(self.time_sequence-1):
+            input_single = inputs[:,i,:,:]
+            self.check_input_single = input_single
+            #output_single = conv_identity(input_single)
+            #output_single = tf.math.multiply(input_single,projection_layer)
+            output_single = self.projection_model(input_single)
+            self.check_output_single = output_single
+            output_single = tf.keras.activations.relu(output_single)
+            #output_single = tf.math.add(output_single,relation_layer)
+            output_single = self.relation_layer(output_single)
+            if i == 0:
+                conv_layers_outputs.append(output_single)
+                continue
+            else:
+                att_progression = []
+                previous_embedding = conv_layers_outputs[i-1]
+                att_single = tf.math.exp(tf.matmul(output_single,
+                                                   tf.transpose(previous_embedding,perm=[0,2,1])))
+                att_single = soft_max_layer(att_single)
+                attention_outputs.append(att_single)
+                for k in range(self.feature_num):
+                    att_single_feature = att_single[:,k,:]
+                    att_single_feature = tf.expand_dims(att_single_feature,axis=2)
+                    progression_embedding = tf.reduce_sum(tf.math.multiply(previous_embedding,att_single_feature),1)
+                    att_progression.append(progression_embedding)
+
+                att_progression = tf.stack(att_progression,axis=1)
+                self.check_att_progression = att_progression
+                output_single_progression = tf.math.add(att_progression,output_single)
+                conv_layers_outputs.append(output_single_progression)
+
+            conv_layers_outputs = tf.stack(conv_layers_outputs)
+
+
+
+
 
 
     def tcn_encoder_second_last_level(self):

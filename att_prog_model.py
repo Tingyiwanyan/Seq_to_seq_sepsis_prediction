@@ -184,7 +184,7 @@ class protatype_ehr():
                                                                 self.train_data.shape[2]))
 
         self.train_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.train_data_norm, self.train_logit, self.train_on_site_time, self.train_data_norm,self.index_train))  # ,self.train_sofa_score))
+            (self.train_data, self.train_logit, self.train_on_site_time, self.train_data,self.index_train))  # ,self.train_sofa_score))
         self.train_dataset = self.train_dataset.shuffle(buffer_size=1024).batch(self.batch_size)
         cohort_index = np.where(self.train_logit == 1)[0]
         control_index = np.where(self.train_logit == 0)[0]
@@ -196,4 +196,7 @@ class protatype_ehr():
         self.memory_bank_control_origin = self.train_data_origin[control_index]
         self.num_cohort = self.memory_bank_cohort.shape[0]
         self.num_control = self.memory_bank_control.shape[0]
+
+    def temporal_progression_model(self):
+        inputs = layers.Input((self.time_sequence, self.feature_num))
 
