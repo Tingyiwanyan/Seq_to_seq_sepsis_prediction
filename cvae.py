@@ -57,7 +57,7 @@ class projection_temporal(keras.layers.Layer):
            self.check_input_single = input_single
            input_total.append(input_single)
 
-        input_total = tf.stack(input_total,1)
+       input_total = tf.stack(input_total,1)
        self.check_input_total = input_total
 
        return tf.keras.activations.relu(tf.math.multiply(input_total, self.kernel))
