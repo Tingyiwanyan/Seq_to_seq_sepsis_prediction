@@ -758,6 +758,8 @@ class protatype_ehr():
         #self.check_projection_layer = projection_layer
         inputs = layers.Input((self.time_sequence, self.feature_num))
         inputs = tf.expand_dims(inputs,axis=3)
+        input_test = inputs[:,0,:,:]
+        output_test = self.projection_model(input_test)
         self.check_in = inputs
         #inputs = tf.broadcast_to(inputs,shape=[inputs.shape[0],inputs.shape[1],inputs.shape[2],self.latent_dim])
         conv_layers_outputs = []
@@ -817,7 +819,7 @@ class protatype_ehr():
         final_embedding_outputs = tf.stack(final_embedding_outputs,1)
 
         return tf.keras.Model(inputs,
-                              [conv_layers_outputs],
+                              [output_test],
                               name='temporal_progression')
 
 
