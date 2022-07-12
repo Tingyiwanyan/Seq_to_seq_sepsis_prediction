@@ -45,12 +45,13 @@ class projection_temporal(keras.layers.Layer):
       super(projection_temporal, self).__init__(**kwargs)
 
    def build(self, input_shape):
-        self.kernel = self.add_weight(name = 'kernel', shape = (input_shape[1], self.output_dim),
+        self.kernel = self.add_weight(name = 'kernel', shape = (input_shape[-2], self.output_dim),
                                       initializer = 'normal', trainable = True)
         #super(projection_temporal, self).build(input_shape)
 
    def call(self, input_data):
-       return tf.math.multiply(input_data, self.kernel)
+       input_data = tf.math.multiply(input_data,input_data)
+       return tf.keras.activations.relu(tf.math.multiply(input_data, self.kernel))
 
 """
 class translation_temporal(keras.layers.Layer):
@@ -83,6 +84,7 @@ class translation_temporal(keras.layers.Layer):
 
    def call(self, input_data):
        return tf.math.add(input_data, self.kernel)
+
 
 class feature_embedding_impotance(keras.layers.Layer):
 
@@ -749,17 +751,13 @@ class protatype_ehr():
                               name='tcn_deconv')
 
     def temporal_progression_model(self):
-        #init_relation_value = tf.random.normal(shape=(self.feature_num,self.latent_dim))
-        #init_projection_weight = tf.random.normal(shape=(self.feature_num,self.latent_dim))
-        #relation_layer = tf.Variable(init_relation_value)
-        #relation_layer = translation_temporal(self.latent_dim)
-        #projection_layer = tf.Variable(init_projection_weight)
-        #projection_layer = projection_temporal(self.latent_dim)
-        #self.check_projection_layer = projection_layer
+
         inputs = layers.Input((self.time_sequence, self.feature_num))
         inputs = tf.expand_dims(inputs,axis=3)
-        input_test = inputs[:,0,:,:]
-        output_test = self.projection_model(input_test)
+        #input_test = inputs[:,0,:,:]
+        #output_test = self.projection_model(input_test)
+        #output_whole = self.projection_model(inputs)
+        #output_whole = self.relation_layer(output_whole)
         self.check_in = inputs
         #inputs = tf.broadcast_to(inputs,shape=[inputs.shape[0],inputs.shape[1],inputs.shape[2],self.latent_dim])
         conv_layers_outputs = []
@@ -771,13 +769,14 @@ class protatype_ehr():
         soft_max_layer = tf.keras.layers.Softmax()
         conv_identity = tf.keras.layers.Conv1D(self.latent_dim, 1, activation='relu', dilation_rate=1)
         for i in range(self.time_sequence):
-            input_single = inputs[:,i,:,:]
+            #input_single = inputs[:,i,:,:]
+            input_single = tf.gather(inputs,i,axis=1)
             self.check_input_single = input_single
             #output_single = conv_identity(input_single)
             #output_single = tf.math.multiply(input_single,projection_layer)
             output_single = self.projection_model(input_single)
             self.check_output_single = output_single
-            output_single = tf.keras.activations.relu(output_single)
+            #output_single = tf.keras.activations.relu(output_single)
             #output_single = tf.math.add(output_single,relation_layer)
             output_single = self.relation_layer(output_single)
 
@@ -818,9 +817,6 @@ class protatype_ehr():
         conv_layers_outputs = tf.stack(conv_layers_outputs,1)
         final_embedding_outputs = tf.stack(final_embedding_outputs,1)
 
-        return tf.keras.Model(inputs,
-                              [output_test],
-                              name='temporal_progression')
 
 
 
