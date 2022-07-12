@@ -84,12 +84,27 @@ class translation_temporal(keras.layers.Layer):
    def call(self, input_data):
        return tf.math.add(input_data, self.kernel)
 
+class feature_embedding_impotance(keras.layers.Layer):
+
+   def __init__(self, output_dim, **kwargs):
+      self.output_dim = output_dim
+      super(feature_embedding_impotance, self).__init__(**kwargs)
+
+   def build(self, input_shape):
+        self.kernel = self.add_weight(name = 'kernel', shape = (input_shape[-1], self.output_dim),
+                                      initializer = 'normal', trainable = True)
+        #super(projection_temporal, self).build(input_shape)
+
+   def call(self, input_data):
+       return tf.matmul(input_data, self.kernel)
+
 
 class protatype_ehr():
     def __init__(self, projection, translation):
         #self.read_d = read_d
         self.projection_model = projection(latent_dim_global)
         self.relation_layer = translation(latent_dim_global)
+        self.embedding_att_layer = feature_embedding_impotance(1)
         #self.train_data = read_d.train_data
         #self.test_data = read_d.test_data
         #self.validate_data = read_d.val_data
@@ -747,11 +762,13 @@ class protatype_ehr():
         #inputs = tf.broadcast_to(inputs,shape=[inputs.shape[0],inputs.shape[1],inputs.shape[2],self.latent_dim])
         conv_layers_outputs = []
         attention_outputs = []
+        final_embedding_outputs = []
         self.check_att_output = attention_outputs
         self.check_conv_layer_output = conv_layers_outputs
+        self.check_final_embedding = final_embedding_outputs
         soft_max_layer = tf.keras.layers.Softmax()
         conv_identity = tf.keras.layers.Conv1D(self.latent_dim, 1, activation='relu', dilation_rate=1)
-        for i in range(self.time_sequence-1):
+        for i in range(self.time_sequence):
             input_single = inputs[:,i,:,:]
             self.check_input_single = input_single
             #output_single = conv_identity(input_single)
@@ -761,8 +778,14 @@ class protatype_ehr():
             output_single = tf.keras.activations.relu(output_single)
             #output_single = tf.math.add(output_single,relation_layer)
             output_single = self.relation_layer(output_single)
+
             if i == 0:
+                final_embedding_att = self.embedding_att_layer(output_single)
+                final_embedding_att = soft_max_layer(tf.math.exp(final_embedding_att))
+                final_embedding = tf.math.multiply(output_single,final_embedding_att)
+                final_embedding = tf.reduce_sum(final_embedding,axis=-2)
                 conv_layers_outputs.append(output_single)
+                final_embedding_outputs.append(final_embedding)
                 continue
             else:
                 att_progression = []
@@ -780,9 +803,22 @@ class protatype_ehr():
                 att_progression = tf.stack(att_progression,axis=1)
                 self.check_att_progression = att_progression
                 output_single_progression = tf.math.add(att_progression,output_single)
+                #self.check_correct = conv_layers_outputs
+                final_embedding_att = self.embedding_att_layer(output_single)
+                final_embedding_att = soft_max_layer(tf.math.exp(final_embedding_att))
+                final_embedding = tf.math.multiply(output_single, final_embedding_att)
+                final_embedding = tf.reduce_sum(final_embedding, axis=-2)
                 conv_layers_outputs.append(output_single_progression)
+                final_embedding_outputs.append(final_embedding)
 
-            conv_layers_outputs = tf.stack(conv_layers_outputs)
+
+
+        conv_layers_outputs = tf.stack(conv_layers_outputs,1)
+        final_embedding_outputs = tf.stack(final_embedding_outputs,1)
+
+        return tf.keras.Model(inputs,
+                              [conv_layers_outputs],
+                              name='temporal_progression')
 
 
 
