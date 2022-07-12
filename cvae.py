@@ -47,11 +47,12 @@ class projection_temporal(keras.layers.Layer):
    def build(self, input_shape):
         self.kernel = self.add_weight(name = 'kernel', shape = (input_shape[-2], self.output_dim),
                                       initializer = 'normal', trainable = True)
+        self.time_sequence_shape = input_shape[1]
         #super(projection_temporal, self).build(input_shape)
 
    def call(self, input_data):
        input_total = []
-       for i in range(self.time_sequence):
+       for i in range(self.time_sequence_shape):
            # input_single = inputs[:,i,:,:]
            input_single = tf.gather(input_data, i, axis=1)
            self.check_input_single = input_single
