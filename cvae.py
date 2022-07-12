@@ -50,8 +50,17 @@ class projection_temporal(keras.layers.Layer):
         #super(projection_temporal, self).build(input_shape)
 
    def call(self, input_data):
-       input_data = tf.math.multiply(input_data,input_data)
-       return tf.keras.activations.relu(tf.math.multiply(input_data, self.kernel))
+       input_total = []
+       for i in range(self.time_sequence):
+           # input_single = inputs[:,i,:,:]
+           input_single = tf.gather(input_data, i, axis=1)
+           self.check_input_single = input_single
+           input_total.append(input_single)
+
+        input_total = tf.stack(input_total,1)
+       self.check_input_total = input_total
+
+       return tf.keras.activations.relu(tf.math.multiply(input_total, self.kernel))
 
 """
 class translation_temporal(keras.layers.Layer):
