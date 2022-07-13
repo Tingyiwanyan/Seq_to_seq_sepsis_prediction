@@ -97,10 +97,11 @@ class att_temporal(keras.layers.Layer):
         self.check_att_output = att_output
         input_data_compare = tf.expand_dims(input_data,axis=2)[:,0:-1,:,:,:]
         self.check_input_data_compare = input_data_compare
-        progression_embedding = tf.reduce_sum(tf.math.multiply(input_data_compare,att_output),axis=3)
+        progression_embedding = tf.reduce_sum(tf.math.multiply(input_data_compare,att_output),axis=-2)
         self.check_progression_embedding = progression_embedding
+        input_data[:,1:,:,:] = tf.math.add(input_data[:,1:,:,:],progression_embedding)
 
-        return tf.math.add(input_data,progression_embedding)
+        return input_data
 
 
 class feature_embedding_impotance(keras.layers.Layer):
