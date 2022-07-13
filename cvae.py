@@ -67,7 +67,8 @@ class translation_temporal(keras.layers.Layer):
         #super(projection_temporal, self).build(input_shape)
 
     def call(self, input_data):
-        return tf.keras.activations.relu(tf.math.add(input_data, self.kernel))
+        input_data = tf.math.l2_normalize(input_data,axis=-1)
+        return tf.math.add(input_data, self.kernel)
 
 class att_temporal(keras.layers.Layer):
 
@@ -83,35 +84,21 @@ class att_temporal(keras.layers.Layer):
         self.check_conv_layer_output = conv_layers_outputs
         self.check_final_embedding = final_embedding_outputs
         #soft_max_layer = tf.keras.layers.Softmax()
-        for i in range(input_data.shape[1]):
-            # input_single = inputs[:,i,:,:]
-            input_single = tf.gather(input_data, i, axis=1)
-            self.check_input_single = input_single
-            input_single = tf.math.l2_normalize(input_single,axis=-1)
-            if i == 0:
-                conv_layers_outputs.append(input_single)
-                continue
-            else:
-                att_progression = []
-                previous_embedding = tf.gather(input_data,i-1,axis=1)#conv_layers_outputs[i - 1]
-                #previous_embedding_compare = tf.math.l2_normalize(previous_embedding_compare,axis=-1)
-                att_single = tf.math.exp(tf.matmul(input_single,
-                                                   tf.transpose(previous_embedding, perm=[0, 2, 1])))
-                att_single = tf.keras.activations.softmax(att_single,axis=-1)
-                attention_outputs.append(att_single)
-                for k in range(34):
-                    att_single_feature = tf.gather(att_single,k,axis=1)#[:, k, :]
-                    att_single_feature = tf.expand_dims(att_single_feature, axis=2)
-                    progression_embedding = tf.reduce_sum(tf.math.multiply(previous_embedding, att_single_feature), 1)
-                    att_progression.append(progression_embedding)
-                att_progression = tf.stack(att_progression, axis=1)
-                self.check_att_progression = att_progression
-                output_single_progression = tf.math.add(att_progression, input_single)
-                conv_layers_outputs.append(output_single_progression)
+        input_data = tf.math.l2_normalize(input_data,axis=-1)
+        input_previous = input_data[:,0:-1,:,:]
+        input_after = input_data[:,1:,:,:]
 
-        #conv_layers_outputs = tf.stack(conv_layers_outputs, 1)
+        att_output = tf.math.exp(tf.matmul(input_after,tf.transpose(input_previous,perm=[0,0,2,1])))
+        att_output = tf.keras.activations.softmax(att_output, axis=-1)
 
-        return tf.stack(conv_layers_outputs, 1)
+        #att_output = tf.expand_dims(att_output,axis=3)
+        self.check_att_output = att_output
+        input_data_compare = tf.expand_dims(input_data,axis=2)[:,0:-1,:,:,:]
+        self.check_input_data_compare = input_data_compare
+        progression_embedding = tf.reduce_sum(tf.math.multiply(input_data_compare,att_output),axis=3)
+        self.check_progression_embedding = progression_embedding
+
+        return tf.math.add(input_data,progression_embedding)
 
 
 class feature_embedding_impotance(keras.layers.Layer):
