@@ -99,7 +99,7 @@ class att_temporal(keras.layers.Layer):
         self.check_input_data_compare = input_data_compare
         progression_embedding = tf.reduce_sum(tf.math.multiply(input_data_compare,att_output),axis=-2)
         self.check_progression_embedding = progression_embedding
-        input_data_add = tf.gather(input_data,indices=list(np.array(range(input_data.shape[1]))+1),axis=1)
+        input_data_add = tf.gather(input_data,indices=list(np.array(range(input_data.shape[1]-1))+1),axis=1)
         input_data_add = tf.math.add(input_data_add,progression_embedding)
         self.check_input_data_add = input_data_add
         input_data_init = tf.gather(input_data,indices=[1],axis=1)
