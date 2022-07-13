@@ -62,7 +62,7 @@ class translation_temporal(keras.layers.Layer):
         super(translation_temporal, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        self.kernel = self.add_weight(name = 'kernel', shape = (input_shape[1], self.output_dim),
+        self.kernel = self.add_weight(name = 'kernel', shape = (input_shape[-2], self.output_dim),
                                       initializer = 'normal', trainable = True)
         #super(projection_temporal, self).build(input_shape)
 
@@ -82,7 +82,7 @@ class att_temporal(keras.layers.Layer):
         self.check_att_output = attention_outputs
         self.check_conv_layer_output = conv_layers_outputs
         self.check_final_embedding = final_embedding_outputs
-        soft_max_layer = tf.keras.layers.Softmax()
+        #soft_max_layer = tf.keras.layers.Softmax()
         for i in range(input_data.shape[1]):
             # input_single = inputs[:,i,:,:]
             input_single = tf.gather(input_data, i, axis=1)
@@ -96,7 +96,7 @@ class att_temporal(keras.layers.Layer):
                 previous_embedding = tf.gather(input_data,i-1,axis=1)#conv_layers_outputs[i - 1]
                 att_single = tf.math.exp(tf.matmul(input_single,
                                                    tf.transpose(previous_embedding, perm=[0, 2, 1])))
-                att_single = soft_max_layer(att_single)
+                att_single = tf.keras.activations.softmax(att_single,axis=-1)
                 attention_outputs.append(att_single)
                 for k in range(34):
                     att_single_feature = tf.gather(att_single,k,axis=1)#[:, k, :]
@@ -125,7 +125,11 @@ class feature_embedding_impotance(keras.layers.Layer):
         #super(projection_temporal, self).build(input_shape)
 
     def call(self, input_data):
-        return tf.matmul(input_data, self.kernel)
+        #soft_max_layer = tf.keras.layers.Softmax()
+        final_embedding_att = tf.matmul(input_data, self.kernel)
+        final_embedding_att = tf.keras.activations.softmax(tf.math.exp(final_embedding_att),axis=-2)
+        final_embedding = tf.math.multiply(input_data, final_embedding_att)
+        return tf.reduce_sum(final_embedding, axis=-2)
 
 
 class protatype_ehr():
@@ -230,8 +234,8 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
-        file_path = '/prj0129/tiw4003/Interpolate_data/'
+        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        #file_path = '/prj0129/tiw4003/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -778,10 +782,24 @@ class protatype_ehr():
                               output_deconv4,
                               name='tcn_deconv')
 
+
+    def temporal_progression_model(self):
+        inputs = layers.Input((self.time_sequence, self.feature_num,1))
+        #inputs = tf.expand_dims(inputs, axis=3)
+        output = self.projection_model(inputs)
+        self.check_output_single = output
+        output = self.relation_layer(output)
+        output_whole = self.att_relation_layer(output)
+        self.check_output_whole = output_whole
+        output = self.embedding_att_layer(output_whole)
+
+        return tf.keras.Model(inputs,output)
+
+    """
     def temporal_progression_model(self):
 
-        inputs = layers.Input((self.time_sequence, self.feature_num))
-        inputs = tf.expand_dims(inputs,axis=3)
+        inputs = layers.Input((self.time_sequence, self.feature_num,1))
+        #inputs = tf.expand_dims(inputs,axis=3)
         #input_test = inputs[:,0,:,:]
         #output_test = self.projection_model(input_test)
         #output_whole = self.projection_model(inputs)
@@ -845,11 +863,8 @@ class protatype_ehr():
         conv_layers_outputs = tf.stack(conv_layers_outputs,1)
         final_embedding_outputs = tf.stack(final_embedding_outputs,1)
 
-
-
-
-
-
+        return tf.keras.Model(inputs,final_embedding_outputs)
+    """
 
     def tcn_encoder_second_last_level(self):
         """
