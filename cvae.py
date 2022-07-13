@@ -83,7 +83,7 @@ class att_temporal(keras.layers.Layer):
         self.check_conv_layer_output = conv_layers_outputs
         self.check_final_embedding = final_embedding_outputs
         soft_max_layer = tf.keras.layers.Softmax()
-        for i in range(self.input_data.shape[1]):
+        for i in range(input_data.shape[1]):
             # input_single = inputs[:,i,:,:]
             input_single = tf.gather(input_data, i, axis=1)
             self.check_input_single = input_single
@@ -133,6 +133,7 @@ class protatype_ehr():
         #self.read_d = read_d
         self.projection_model = projection(latent_dim_global)
         self.relation_layer = translation(latent_dim_global)
+        self.att_relation_layer = att_temporal(latent_dim_global)
         self.embedding_att_layer = feature_embedding_impotance(1)
         #self.train_data = read_d.train_data
         #self.test_data = read_d.test_data
