@@ -104,7 +104,7 @@ class att_temporal(keras.layers.Layer):
         self.check_input_data_add = input_data_add
         input_data_init = tf.gather(input_data,indices=[1],axis=1)
         self.check_input_data_init = input_data_init
-        return tf.concat(input_data_init,input_data_add,axis=1)
+        return tf.concat([input_data_init,input_data_add],axis=1)
 
 
 class feature_embedding_impotance(keras.layers.Layer):
