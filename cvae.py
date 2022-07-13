@@ -46,7 +46,7 @@ class projection_temporal(keras.layers.Layer):
 
    def build(self, input_shape):
         self.kernel = self.add_weight(name = 'kernel', shape = (input_shape[-2], self.output_dim),
-                                      initializer = 'normal', trainable = True)
+                                      initializer = tf.keras.initializers.he_normal(seed=None), trainable = True)
         #self.time_sequence_shape = input_shape[1]
         #super(projection_temporal, self).build(input_shape)
 
@@ -63,11 +63,11 @@ class translation_temporal(keras.layers.Layer):
 
     def build(self, input_shape):
         self.kernel = self.add_weight(name = 'kernel', shape = (input_shape[-2], self.output_dim),
-                                      initializer = 'normal', trainable = True)
+                                      initializer = tf.keras.initializers.he_normal(seed=None), trainable = True)
         #super(projection_temporal, self).build(input_shape)
 
     def call(self, input_data):
-        return tf.math.add(input_data, self.kernel)
+        return tf.keras.activations.relu(tf.math.add(input_data, self.kernel))
 
 class att_temporal(keras.layers.Layer):
 
@@ -87,13 +87,14 @@ class att_temporal(keras.layers.Layer):
             # input_single = inputs[:,i,:,:]
             input_single = tf.gather(input_data, i, axis=1)
             self.check_input_single = input_single
-
+            input_single = tf.math.l2_normalize(input_single,axis=-1)
             if i == 0:
                 conv_layers_outputs.append(input_single)
                 continue
             else:
                 att_progression = []
                 previous_embedding = tf.gather(input_data,i-1,axis=1)#conv_layers_outputs[i - 1]
+                #previous_embedding_compare = tf.math.l2_normalize(previous_embedding_compare,axis=-1)
                 att_single = tf.math.exp(tf.matmul(input_single,
                                                    tf.transpose(previous_embedding, perm=[0, 2, 1])))
                 att_single = tf.keras.activations.softmax(att_single,axis=-1)
@@ -121,12 +122,12 @@ class feature_embedding_impotance(keras.layers.Layer):
 
     def build(self, input_shape):
         self.kernel = self.add_weight(name = 'kernel', shape = (input_shape[-1], self.output_dim),
-                                      initializer = 'normal', trainable = True)
+                                      initializer = tf.keras.initializers.he_normal(seed=None), trainable = True)
         #super(projection_temporal, self).build(input_shape)
 
     def call(self, input_data):
         #soft_max_layer = tf.keras.layers.Softmax()
-        final_embedding_att = tf.matmul(input_data, self.kernel)
+        final_embedding_att = tf.keras.activations.relu(tf.matmul(input_data, self.kernel))
         final_embedding_att = tf.keras.activations.softmax(tf.math.exp(final_embedding_att),axis=-2)
         final_embedding = tf.math.multiply(input_data, final_embedding_att)
         return tf.reduce_sum(final_embedding, axis=-2)
