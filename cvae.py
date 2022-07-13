@@ -261,6 +261,8 @@ class protatype_ehr():
         with open(file_path + 'train_origin.npy', 'rb') as f:
             self.train_data_origin = np.load(f)
 
+        self.train_data = np.expand_dims(self.train_data,axis=3)
+        self.val_data = np.expand_dims(self.val_data,axis=3)
         self.max_train_data = np.max(np.reshape(self.train_data,(self.train_data.shape[0]*self.train_data.shape[1],
                                                                  self.train_data.shape[2])),0)
         self.min_train_data = np.min(np.reshape(self.train_data,(self.train_data.shape[0]*self.train_data.shape[1],
@@ -282,7 +284,7 @@ class protatype_ehr():
                                                                 self.train_data.shape[2]))
 
         self.train_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.train_data_norm, self.train_logit, self.train_on_site_time, self.train_data_norm,self.index_train))  # ,self.train_sofa_score))
+            (self.train_data, self.train_logit, self.train_on_site_time, self.train_data,self.index_train))  # ,self.train_sofa_score))
         self.train_dataset = self.train_dataset.shuffle(buffer_size=1024).batch(self.batch_size)
         cohort_index = np.where(self.train_logit == 1)[0]
         control_index = np.where(self.train_logit == 0)[0]
@@ -795,76 +797,63 @@ class protatype_ehr():
 
         return tf.keras.Model(inputs,output)
 
-    """
-    def temporal_progression_model(self):
+    def train_temporal_progression(self):
+        # input = layers.Input((self.time_sequence, self.feature_num))
+        #self.tcn = self.tcn_encoder_second_last_level()
 
-        inputs = layers.Input((self.time_sequence, self.feature_num,1))
-        #inputs = tf.expand_dims(inputs,axis=3)
-        #input_test = inputs[:,0,:,:]
-        #output_test = self.projection_model(input_test)
-        #output_whole = self.projection_model(inputs)
-        #output_whole = self.relation_layer(output_whole)
-        self.check_in = inputs
-        #inputs = tf.broadcast_to(inputs,shape=[inputs.shape[0],inputs.shape[1],inputs.shape[2],self.latent_dim])
-        conv_layers_outputs = []
-        attention_outputs = []
-        final_embedding_outputs = []
-        self.check_att_output = attention_outputs
-        self.check_conv_layer_output = conv_layers_outputs
-        self.check_final_embedding = final_embedding_outputs
-        soft_max_layer = tf.keras.layers.Softmax()
-        conv_identity = tf.keras.layers.Conv1D(self.latent_dim, 1, activation='relu', dilation_rate=1)
-        for i in range(self.time_sequence):
-            #input_single = inputs[:,i,:,:]
-            input_single = tf.gather(inputs,i,axis=1)
-            self.check_input_single = input_single
-            #output_single = conv_identity(input_single)
-            #output_single = tf.math.multiply(input_single,projection_layer)
-            output_single = self.projection_model(input_single)
-            self.check_output_single = output_single
-            #output_single = tf.keras.activations.relu(output_single)
-            #output_single = tf.math.add(output_single,relation_layer)
-            output_single = self.relation_layer(output_single)
+        self.temporal = self.temporal_progression_model()
+        # tcn = self.tcn(input)
+        self.auc_all = []
+        self.loss_track = []
+        # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
+        self.projection_layer = self.project_logit()
+        self.bceloss = tf.keras.losses.BinaryCrossentropy()
 
-            if i == 0:
-                final_embedding_att = self.embedding_att_layer(output_single)
-                final_embedding_att = soft_max_layer(tf.math.exp(final_embedding_att))
-                final_embedding = tf.math.multiply(output_single,final_embedding_att)
-                final_embedding = tf.reduce_sum(final_embedding,axis=-2)
-                conv_layers_outputs.append(output_single)
-                final_embedding_outputs.append(final_embedding)
-                continue
-            else:
-                att_progression = []
-                previous_embedding = conv_layers_outputs[i-1]
-                att_single = tf.math.exp(tf.matmul(output_single,
-                                                   tf.transpose(previous_embedding,perm=[0,2,1])))
-                att_single = soft_max_layer(att_single)
-                attention_outputs.append(att_single)
-                for k in range(self.feature_num):
-                    att_single_feature = att_single[:,k,:]
-                    att_single_feature = tf.expand_dims(att_single_feature,axis=2)
-                    progression_embedding = tf.reduce_sum(tf.math.multiply(previous_embedding,att_single_feature),1)
-                    att_progression.append(progression_embedding)
+        for epoch in range(self.pre_train_epoch):
+            print("\nStart of epoch %d" % (epoch,))
 
-                att_progression = tf.stack(att_progression,axis=1)
-                self.check_att_progression = att_progression
-                output_single_progression = tf.math.add(att_progression,output_single)
-                #self.check_correct = conv_layers_outputs
-                final_embedding_att = self.embedding_att_layer(output_single)
-                final_embedding_att = soft_max_layer(tf.math.exp(final_embedding_att))
-                final_embedding = tf.math.multiply(output_single, final_embedding_att)
-                final_embedding = tf.reduce_sum(final_embedding, axis=-2)
-                conv_layers_outputs.append(output_single_progression)
-                final_embedding_outputs.append(final_embedding)
+            # extract_val, global_val,k = self.model_extractor(self.val_data)
+            last_layer_output_val = self.temporal(self.val_data)
+            #last_layer_output_val = tcn_temporal_output_val[1]
+            on_site_extract_val = [last_layer_output_val[i, np.abs(int(self.val_on_site_time[i]) - 1), :] for i in
+                                   range(self.val_on_site_time.shape[0])]
+            on_site_extract_array_val = tf.stack(on_site_extract_val)
+            prediction_val = self.projection_layer(on_site_extract_array_val)
+            self.check_prediction_val = prediction_val
+            val_acc = roc_auc_score(self.val_logit, prediction_val)
+            print("auc")
+            print(val_acc)
+            self.auc_all.append(val_acc)
+            for step, (x_batch_train, y_batch_train, on_site_time, x_batch_origin) in enumerate(self.train_dataset):
+                self.check_x_batch = x_batch_train
+                self.check_on_site_time = on_site_time
+                self.check_label = y_batch_train
+                with tf.GradientTape() as tape:
+                    last_layer_output = self.temporal(x_batch_train)
+                    self.check_output = last_layer_output
+                    #last_layer_output = tcn_temporal_output[1]
+                    on_site_extract = [last_layer_output[i, int(on_site_time[i] - 1), :] for i in
+                                       range(on_site_time.shape[0])]
+                    on_site_extract_array = tf.stack(on_site_extract)
+                    prediction = self.projection_layer(on_site_extract_array)
+                    loss = self.bceloss(y_batch_train, prediction)
+                    self.check_prediction = prediction
 
+                gradients = \
+                    tape.gradient(loss,
+                                  self.temporal.trainable_variables + self.projection_layer.trainable_weights)
+                optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
 
+                optimizer.apply_gradients(zip(gradients,
+                                              self.temporal.trainable_variables + self.projection_layer.trainable_weights))
 
-        conv_layers_outputs = tf.stack(conv_layers_outputs,1)
-        final_embedding_outputs = tf.stack(final_embedding_outputs,1)
+                if step % 20 == 0:
+                    print("Training loss(for one batch) at step %d: %.4f"
+                          % (step, float(loss)))
+                    print("seen so far: %s samples" % ((step + 1) * self.batch_size))
 
-        return tf.keras.Model(inputs,final_embedding_outputs)
-    """
+                    self.loss_track.append(loss)
+
 
     def tcn_encoder_second_last_level(self):
         """
@@ -1057,6 +1046,28 @@ class protatype_ehr():
                 )
             ],
             name="transition_projection",
+        )
+        return model
+
+    def project_logit(self):
+        model = tf.keras.Sequential(
+            [
+                # Note the AutoEncoder-like structure.
+                layers.Input((self.latent_dim)),
+                layers.Dense(
+                    50,
+                    # use_bias=False,
+                    kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+                    activation='relu'
+                ),
+                layers.Dense(
+                    1,
+                    use_bias=True,
+                    kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+                    activation='sigmoid'
+                )
+            ],
+            name="projection_logit",
         )
         return model
 
