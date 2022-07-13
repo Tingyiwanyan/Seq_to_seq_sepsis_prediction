@@ -98,7 +98,7 @@ class att_temporal(keras.layers.Layer):
                                                    tf.transpose(previous_embedding, perm=[0, 2, 1])))
                 att_single = soft_max_layer(att_single)
                 attention_outputs.append(att_single)
-                for k in range(self.feature_num):
+                for k in range(34):
                     att_single_feature = tf.gather(att_single,k,axis=1)#[:, k, :]
                     att_single_feature = tf.expand_dims(att_single_feature, axis=2)
                     progression_embedding = tf.reduce_sum(tf.math.multiply(previous_embedding, att_single_feature), 1)
