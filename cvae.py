@@ -88,6 +88,8 @@ class att_temporal(keras.layers.Layer):
         input_previous = input_data[:,0:-1,:,:]
         input_after = input_data[:,1:,:,:]
 
+        self.check_input_previous = input_previous
+        self.check_input_after = input_after
         att_output = tf.math.exp(tf.matmul(input_after,tf.transpose(input_previous,perm=[0,0,2,1])))
         att_output = tf.keras.activations.softmax(att_output, axis=-1)
 
