@@ -825,7 +825,7 @@ class protatype_ehr():
             print("auc")
             print(val_acc)
             self.auc_all.append(val_acc)
-            for step, (x_batch_train, y_batch_train, on_site_time, x_batch_origin) in enumerate(self.train_dataset):
+            for step, (x_batch_train, y_batch_train, on_site_time, x_batch_origin, index_train) in enumerate(self.train_dataset):
                 self.check_x_batch = x_batch_train
                 self.check_on_site_time = on_site_time
                 self.check_label = y_batch_train
