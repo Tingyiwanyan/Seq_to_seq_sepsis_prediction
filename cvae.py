@@ -783,6 +783,20 @@ class protatype_ehr():
         inputs = layers.Input((self.time_sequence, self.feature_num,1))
         #inputs = tf.expand_dims(inputs, axis=3)
         output = self.projection_model(inputs)
+        forward_1 = layers.Dense(
+            self.latent_dim,
+            # use_bias=False,
+            kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+            activation='relu'
+        )
+        forward_2 = layers.Dense(
+            self.latent_dim,
+            # use_bias=False,
+            kernel_initializer=tf.keras.initializers.he_normal(seed=None),
+            activation='relu'
+        )
+        output = forward_1(output)
+        #output = forward_2(output)
         self.check_output_single = output
         output = self.relation_layer(output)
         output_whole = self.att_relation_layer(output)
