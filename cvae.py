@@ -796,7 +796,7 @@ class protatype_ehr():
             activation='relu'
         )
         output = forward_1(output)
-        #output = forward_2(output)
+        output = forward_2(output)
         self.check_output_single = output
         output = self.relation_layer(output)
         output_whole = self.att_relation_layer(output)
