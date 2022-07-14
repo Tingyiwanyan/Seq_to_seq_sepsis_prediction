@@ -862,7 +862,7 @@ class protatype_ehr():
 
                     self.loss_track.append(loss)
 
-    def extract_temporal_att(self):
+    #def extract_temporal_att(self):
 
 
     def tcn_encoder_second_last_level(self):
