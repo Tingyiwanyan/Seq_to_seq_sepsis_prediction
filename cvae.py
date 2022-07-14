@@ -12,7 +12,7 @@ import pandas as pd
 semantic_step_global = 6
 semantic_positive_sample = 4
 unsupervised_cluster_num = 10
-latent_dim_global = 200
+latent_dim_global = 100
 positive_sample_size = 10
 batch_size = 128
 unsupervised_neg_size = 5
@@ -45,7 +45,7 @@ class projection_temporal(keras.layers.Layer):
       super(projection_temporal, self).__init__(**kwargs)
 
    def build(self, input_shape):
-        self.kernel = self.add_weight(name = 'kernel', shape = (1, self.output_dim),
+        self.kernel = self.add_weight(name = 'kernel', shape = (input_shape[-2], self.output_dim),
                                       initializer = tf.keras.initializers.he_normal(seed=None), trainable = True)
         #self.time_sequence_shape = input_shape[1]
         #super(projection_temporal, self).build(input_shape)
@@ -76,6 +76,10 @@ class att_temporal(keras.layers.Layer):
         self.output_dim = output_dim
         super(att_temporal, self).__init__(**kwargs)
 
+    def build(self, input_shape):
+        self.kernel = self.add_weight(name = 'kernel', shape = (self.output_dim, self.output_dim),
+                                      initializer = tf.keras.initializers.he_normal(seed=None), trainable = True)
+
     def call(self, input_data):
         conv_layers_outputs = []
         attention_outputs = []
@@ -90,7 +94,8 @@ class att_temporal(keras.layers.Layer):
 
         self.check_input_previous = input_previous
         self.check_input_after = input_after
-        att_output = tf.math.exp(tf.matmul(input_after,tf.transpose(input_previous,perm=[0,1,3,2])))
+        att_output = tf.matmul(input_after,self.kernel)
+        att_output = tf.math.exp(tf.matmul(att_output,tf.transpose(input_previous,perm=[0,1,3,2])))
         att_output = tf.keras.activations.softmax(att_output, axis=-1)
 
         att_output = tf.expand_dims(att_output,axis=-1)
@@ -796,7 +801,7 @@ class protatype_ehr():
             activation='relu'
         )
         output = forward_1(output)
-        output = forward_2(output)
+        #output = forward_2(output)
         self.check_output_single = output
         output = self.relation_layer(output)
         [output_whole,att_temporal] = self.att_relation_layer(output)
