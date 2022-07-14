@@ -76,6 +76,10 @@ class att_temporal(keras.layers.Layer):
         self.output_dim = output_dim
         super(att_temporal, self).__init__(**kwargs)
 
+    def build(self, input_shape):
+        self.kernel = self.add_weight(name = 'kernel', shape = (self.output_dim, self.output_dim),
+                                      initializer = tf.keras.initializers.he_normal(seed=None), trainable = True)
+
     def call(self, input_data):
         conv_layers_outputs = []
         attention_outputs = []
@@ -90,7 +94,8 @@ class att_temporal(keras.layers.Layer):
 
         self.check_input_previous = input_previous
         self.check_input_after = input_after
-        att_output = tf.math.exp(tf.matmul(input_after,tf.transpose(input_previous,perm=[0,1,3,2])))
+        att_output = tf.matmul(input_after,self.kernel)
+        att_output = tf.math.exp(tf.matmul(att_output,tf.transpose(input_previous,perm=[0,1,3,2])))
         att_output = tf.keras.activations.softmax(att_output, axis=-1)
         att_vis = att_output
         att_output = tf.expand_dims(att_output,axis=-1)
@@ -104,7 +109,11 @@ class att_temporal(keras.layers.Layer):
         self.check_input_data_add = input_data_add
         input_data_init = tf.gather(input_data,indices=[1],axis=1)
         self.check_input_data_init = input_data_init
+<<<<<<< HEAD
         return [tf.concat([input_data_init,input_data_add],axis=1),att_vis]
+=======
+        return [tf.concat([input_data_init,input_data_add],axis=1),att_output]
+>>>>>>> 3e0605faffec6900a3b1515663b53491293ab147
 
 
 class feature_embedding_impotance(keras.layers.Layer):
@@ -123,7 +132,7 @@ class feature_embedding_impotance(keras.layers.Layer):
         final_embedding_att = tf.keras.activations.relu(tf.matmul(input_data, self.kernel))
         final_embedding_att = tf.keras.activations.softmax(tf.math.exp(final_embedding_att),axis=-2)
         final_embedding = tf.math.multiply(input_data, final_embedding_att)
-        return tf.reduce_sum(final_embedding, axis=-2)
+        return [tf.reduce_sum(final_embedding, axis=-2),final_embedding_att]
 
 
 class protatype_ehr():
@@ -799,11 +808,11 @@ class protatype_ehr():
         #output = forward_2(output)
         self.check_output_single = output
         output = self.relation_layer(output)
-        output_whole = self.att_relation_layer(output)
+        [output_whole,att_temporal] = self.att_relation_layer(output)
         self.check_output_whole = output_whole
-        output = self.embedding_att_layer(output_whole)
+        [output,att_final] = self.embedding_att_layer(output_whole)
 
-        return tf.keras.Model(inputs,output)
+        return tf.keras.Model(inputs,[output,att_temporal,att_final])
 
     def train_temporal_progression(self):
         # input = layers.Input((self.time_sequence, self.feature_num))
@@ -821,7 +830,7 @@ class protatype_ehr():
             print("\nStart of epoch %d" % (epoch,))
 
             # extract_val, global_val,k = self.model_extractor(self.val_data)
-            last_layer_output_val = self.temporal(self.val_data)
+            last_layer_output_val = self.temporal(self.val_data)[0]
             #last_layer_output_val = tcn_temporal_output_val[1]
             on_site_extract_val = [last_layer_output_val[i, np.abs(int(self.val_on_site_time[i]) - 1), :] for i in
                                    range(self.val_on_site_time.shape[0])]
@@ -837,7 +846,7 @@ class protatype_ehr():
                 self.check_on_site_time = on_site_time
                 self.check_label = y_batch_train
                 with tf.GradientTape() as tape:
-                    last_layer_output = self.temporal(x_batch_train)
+                    last_layer_output = self.temporal(x_batch_train)[0]
                     self.check_output = last_layer_output
                     #last_layer_output = tcn_temporal_output[1]
                     on_site_extract = [last_layer_output[i, int(on_site_time[i] - 1), :] for i in
@@ -861,6 +870,8 @@ class protatype_ehr():
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
 
                     self.loss_track.append(loss)
+
+    #def extract_temporal_att(self):
 
 
     def tcn_encoder_second_last_level(self):
