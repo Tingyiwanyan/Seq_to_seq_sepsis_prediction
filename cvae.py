@@ -92,7 +92,7 @@ class att_temporal(keras.layers.Layer):
         self.check_input_after = input_after
         att_output = tf.math.exp(tf.matmul(input_after,tf.transpose(input_previous,perm=[0,1,3,2])))
         att_output = tf.keras.activations.softmax(att_output, axis=-1)
-
+        att_vis = att_output
         att_output = tf.expand_dims(att_output,axis=-1)
         self.check_att_output = att_output
         input_data_compare = tf.expand_dims(input_data,axis=2)[:,0:-1,:,:,:]
@@ -104,7 +104,7 @@ class att_temporal(keras.layers.Layer):
         self.check_input_data_add = input_data_add
         input_data_init = tf.gather(input_data,indices=[1],axis=1)
         self.check_input_data_init = input_data_init
-        return tf.concat([input_data_init,input_data_add],axis=1)
+        return [tf.concat([input_data_init,input_data_add],axis=1),att_vis]
 
 
 class feature_embedding_impotance(keras.layers.Layer):
