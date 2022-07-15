@@ -137,7 +137,7 @@ class protatype_ehr():
         #self.read_d = read_d
         self.projection_model = projection(latent_dim_global)
         self.relation_layer = translation(latent_dim_global)
-        self.att_relation_layer = tfa.layers.WeightNormalization(att_temporal(latent_dim_global))
+        self.att_relation_layer = tfa.layers.WeightNormalization(att_temporal(latent_dim_global),data_init=False)
         self.embedding_att_layer = feature_embedding_impotance(1)
         #self.train_data = read_d.train_data
         #self.test_data = read_d.test_data
