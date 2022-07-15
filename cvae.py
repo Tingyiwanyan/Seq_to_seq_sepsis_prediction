@@ -137,7 +137,7 @@ class protatype_ehr():
         #self.read_d = read_d
         self.projection_model = projection(latent_dim_global)
         self.relation_layer = translation(latent_dim_global)
-        self.att_relation_layer = att_temporal(latent_dim_global)
+        self.att_relation_layer = tfa.layers.WeightNormalization(att_temporal(latent_dim_global))
         self.embedding_att_layer = feature_embedding_impotance(1)
         #self.train_data = read_d.train_data
         #self.test_data = read_d.test_data
@@ -801,12 +801,13 @@ class protatype_ehr():
             kernel_initializer=tf.keras.initializers.he_normal(seed=None),
             activation='relu'
         )
-        #output = forward_1(output)
+        #normalization = tfa.layers.WeightNormalization()
+        output = forward_1(output)
         #output = forward_2(output)
         self.check_output_single = output
         output = self.relation_layer(output)
         [output_whole,att_temporal] = self.att_relation_layer(output)
-        output_whole = tfa.layers.WeightNormalization(output_whole)
+        #output_whole = tfa.layers.WeightNormalization(output_whole)
         self.check_output_whole = output_whole
         [output,att_final] = self.embedding_att_layer(output_whole)
 
