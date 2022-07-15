@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import random
 import pandas as pd
+from tensorflow.keras import regularizers
 import tensorflow_addons as tfa
 
 semantic_step_global = 6
@@ -137,7 +138,8 @@ class protatype_ehr():
         #self.read_d = read_d
         self.projection_model = projection(latent_dim_global)
         self.relation_layer = translation(latent_dim_global)
-        self.att_relation_layer = tfa.layers.WeightNormalization(att_temporal(latent_dim_global),data_init=False)
+        #self.att_relation_layer = tfa.layers.WeightNormalization(att_temporal(latent_dim_global),data_init=False)
+        self.att_relation_layer = att_temporal(latent_dim_global,kernel_regularizer=regularizers.L1L2(l1=1e-5, l2=1e-4))
         self.embedding_att_layer = feature_embedding_impotance(1)
         #self.train_data = read_d.train_data
         #self.test_data = read_d.test_data
