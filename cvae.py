@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import random
 import pandas as pd
+import tensorflow_addons as tfa
 
 semantic_step_global = 6
 semantic_positive_sample = 4
@@ -800,11 +801,12 @@ class protatype_ehr():
             kernel_initializer=tf.keras.initializers.he_normal(seed=None),
             activation='relu'
         )
-        output = forward_1(output)
+        #output = forward_1(output)
         #output = forward_2(output)
         self.check_output_single = output
         output = self.relation_layer(output)
         [output_whole,att_temporal] = self.att_relation_layer(output)
+        output_whole = tfa.layers.WeightNormalization(output_whole)
         self.check_output_whole = output_whole
         [output,att_final] = self.embedding_att_layer(output_whole)
 
