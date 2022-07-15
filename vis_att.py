@@ -20,7 +20,8 @@ for i in range(8):
 
 label_whole = label_whole + ['sepsis_on_site']
 
-
+final_embedding_att = final_embedding_att[8]
+relation_on_site = np.where(final_embedding_att == final_embedding_att.max())[0][0]
 
 label_list = ['cat', 'dog', 'domesticated', 'female', 'male', 'wild']
 # cat: 0, dog: 1, domesticated: 2, female: 3, male: 4, wild: 5
