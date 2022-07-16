@@ -12,7 +12,7 @@ import pandas as pd
 semantic_step_global = 6
 semantic_positive_sample = 4
 unsupervised_cluster_num = 10
-latent_dim_global = 100
+latent_dim_global = 150
 positive_sample_size = 10
 batch_size = 128
 unsupervised_neg_size = 5
@@ -109,11 +109,9 @@ class att_temporal(keras.layers.Layer):
         self.check_input_data_add = input_data_add
         input_data_init = tf.gather(input_data,indices=[1],axis=1)
         self.check_input_data_init = input_data_init
-<<<<<<< HEAD
-        return [tf.concat([input_data_init,input_data_add],axis=1),att_vis]
-=======
+
         return [tf.concat([input_data_init,input_data_add],axis=1),att_output]
->>>>>>> 3e0605faffec6900a3b1515663b53491293ab147
+
 
 
 class feature_embedding_impotance(keras.layers.Layer):
@@ -237,8 +235,8 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
-        file_path = '/prj0129/tiw4003/Interpolate_data/'
+        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        #file_path = '/prj0129/tiw4003/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -805,7 +803,7 @@ class protatype_ehr():
             activation='relu'
         )
         output = forward_1(output)
-        #output = forward_2(output)
+        output = forward_2(output)
         self.check_output_single = output
         output = self.relation_layer(output)
         [output_whole,att_temporal] = self.att_relation_layer(output)
