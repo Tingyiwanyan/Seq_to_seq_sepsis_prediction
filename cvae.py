@@ -101,7 +101,8 @@ class att_temporal(keras.layers.Layer):
         self.check_input_after = input_after
         att_output = tf.matmul(input_after,self.kernel)
         att_output_quary = tf.matmul(input_previous,self.kernel_quary)
-        att_output = tf.math.exp(tf.matmul(att_output,tf.transpose(att_output_quary,perm=[0,1,3,2])))
+        #att_output = tf.math.exp(tf.matmul(att_output,tf.transpose(att_output_quary,perm=[0,1,3,2])))
+        att_output = tf.matmul(att_output, tf.transpose(att_output_quary, perm=[0, 1, 3, 2]))/10
         att_output = tf.keras.activations.softmax(att_output, axis=-1)
 
         att_output = tf.expand_dims(att_output,axis=-1)
