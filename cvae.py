@@ -14,7 +14,7 @@ import tensorflow_addons as tfa
 semantic_step_global = 6
 semantic_positive_sample = 4
 unsupervised_cluster_num = 10
-latent_dim_global = 150
+latent_dim_global = 100
 positive_sample_size = 10
 batch_size = 128
 unsupervised_neg_size = 5
@@ -79,7 +79,10 @@ class att_temporal(keras.layers.Layer):
         super(att_temporal, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        self.kernel = self.add_weight(name = 'kernel', shape = (self.output_dim, self.output_dim),
+        self.kernel = self.add_weight(name = 'kernel', shape = (input_shape[-1], self.output_dim),
+                                      initializer = tf.keras.initializers.he_normal(seed=None), trainable = True)
+
+        self.kernel_quary = self.add_weight(name = 'kernel_quary', shape = (input_shape[-1], self.output_dim),
                                       initializer = tf.keras.initializers.he_normal(seed=None), trainable = True)
 
     def call(self, input_data):
@@ -97,7 +100,8 @@ class att_temporal(keras.layers.Layer):
         self.check_input_previous = input_previous
         self.check_input_after = input_after
         att_output = tf.matmul(input_after,self.kernel)
-        att_output = tf.math.exp(tf.matmul(att_output,tf.transpose(input_previous,perm=[0,1,3,2])))
+        att_output_quary = tf.matmul(input_previous,self.kernel_quary)
+        att_output = tf.math.exp(tf.matmul(att_output,tf.transpose(att_output_quary,perm=[0,1,3,2])))
         att_output = tf.keras.activations.softmax(att_output, axis=-1)
 
         att_output = tf.expand_dims(att_output,axis=-1)
@@ -138,7 +142,8 @@ class protatype_ehr():
         #self.read_d = read_d
         self.projection_model = projection(latent_dim_global)
         self.relation_layer = translation(latent_dim_global)
-        self.att_relation_layer = tfa.layers.WeightNormalization(att_temporal(latent_dim_global),data_init=False)
+        #self.att_relation_layer = tfa.layers.WeightNormalization(att_temporal(latent_dim_global),data_init=False)
+        self.att_relation_layer = att_temporal(latent_dim_global)
         #self.att_relation_layer = att_temporal(latent_dim_global,kernel_regularizer=regularizers.L1L2(l1=1e-5, l2=1e-4))
         self.embedding_att_layer = feature_embedding_impotance(1)
         #self.train_data = read_d.train_data
