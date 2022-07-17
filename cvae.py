@@ -110,12 +110,13 @@ class att_temporal(keras.layers.Layer):
 
         att_output = tf.expand_dims(att_output,axis=-1)
         self.check_att_output = att_output
-        input_data_compare = tf.matmul(input_data,self.kernel_value)
-        input_data_compare = tf.expand_dims(input_data_compare,axis=2)[:,0:-1,:,:,:]
+        input_data_value = tf.matmul(input_data,self.kernel_value)
+        input_data_compare = tf.expand_dims(input_data_value,axis=2)[:,0:-1,:,:,:]
         self.check_input_data_compare = input_data_compare
+        self.check_input_data_value = input_data_value
         progression_embedding = tf.reduce_sum(tf.math.multiply(input_data_compare,att_output),axis=-2)
         self.check_progression_embedding = progression_embedding
-        input_data_add = tf.gather(input_data,indices=list(np.array(range(input_data.shape[1]-1))+1),axis=1)
+        input_data_add = tf.gather(input_data_value,indices=list(np.array(range(input_data.shape[1]-1))+1),axis=1)
         input_data_add = tf.math.add(input_data_add,progression_embedding)
         self.check_input_data_add = input_data_add
         input_data_init = tf.gather(input_data,indices=[1],axis=1)
