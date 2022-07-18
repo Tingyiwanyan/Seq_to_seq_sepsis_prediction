@@ -47,7 +47,7 @@ previous_index = []
 previous_index_next = []
 max_info_index = relation_on_site
 value_single = []
-for i in range(2):
+for i in range(3):
     print(target)
     if i == 0:
         top_values = np.sort(final_embedding_att)[::-1][0:3]
