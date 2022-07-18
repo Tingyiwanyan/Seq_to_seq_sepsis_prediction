@@ -47,7 +47,13 @@ previous_index = []
 previous_index_next = []
 max_info_index = relation_on_site
 value_single = []
+<<<<<<< HEAD
 for i in range(3):
+=======
+check_att_values = []
+check_feature_index =[]
+for i in range(5):
+>>>>>>> 026d8222ca1a1f16686ecbb1747cd17b5b011fcb
     print(target)
     if i == 0:
         top_values = np.sort(final_embedding_att)[::-1][0:3]
@@ -65,9 +71,11 @@ for i in range(3):
         previous_index_next = []
         #value = value + list(final_embedding_att)
     else:
-        #print(previous_index)
+        print(previous_index)
         for j in previous_index:
             top_values = np.sort(temporal_progression_att[7-i][j])[::-1][0:3]
+            check_att_values.append(temporal_progression_att[7-i][j])
+            check_feature_index.append([7-i,j])
             for k in top_values:
                 index_preserve = np.where(temporal_progression_att[7-i][j] == k)[0][0]
                 source = source + [index_preserve+(7-i)*34]
@@ -94,7 +102,7 @@ value = [8, 2, 2, 8, 4]
 #target = target[3:]
 #value = value[3:]
 link = dict(source = source, target = target, value = value)
-node = dict(label = label_whole, pad=200, thickness=5)
+node = dict(label = label_whole, pad=100, thickness=10)
 data = go.Sankey(link = link, node=node)
 # plot
 fig = go.Figure(data)

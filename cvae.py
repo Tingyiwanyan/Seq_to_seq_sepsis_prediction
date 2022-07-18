@@ -85,8 +85,8 @@ class att_temporal(keras.layers.Layer):
         self.kernel_quary = self.add_weight(name = 'kernel_quary', shape = (input_shape[-1], self.output_dim),
                                       initializer = tf.keras.initializers.he_normal(seed=None), trainable = True)
 
-        self.kernel_value = self.add_weight(name='kernel_value', shape=(input_shape[-1], self.output_dim),
-                                            initializer=tf.keras.initializers.he_normal(seed=None), trainable=True)
+        #self.kernel_value = self.add_weight(name='kernel_value', shape=(input_shape[-1], self.output_dim),
+         #                                   initializer=tf.keras.initializers.he_normal(seed=None), trainable=True)
 
     def call(self, input_data):
         conv_layers_outputs = []
@@ -107,22 +107,22 @@ class att_temporal(keras.layers.Layer):
         #att_output = tf.math.exp(tf.matmul(att_output,tf.transpose(att_output_quary,perm=[0,1,3,2])))
         att_output = tf.matmul(att_output, tf.transpose(att_output_key, perm=[0, 1, 3, 2]))/10
         att_output = tf.keras.activations.softmax(att_output, axis=-1)
-
+        #att_vis = att_output
         att_output = tf.expand_dims(att_output,axis=-1)
         self.check_att_output = att_output
-        input_data_value = tf.matmul(input_data,self.kernel_value)
-        input_data_compare = tf.expand_dims(input_data_value,axis=2)[:,0:-1,:,:,:]
+        #input_data_value = tf.matmul(input_data,self.kernel_value)
+        input_data_compare = tf.expand_dims(input_data,axis=2)[:,0:-1,:,:,:]
         self.check_input_data_compare = input_data_compare
-        self.check_input_data_value = input_data_value
+        #self.check_input_data_value = input_data_value
         progression_embedding = tf.reduce_sum(tf.math.multiply(input_data_compare,att_output),axis=-2)
         self.check_progression_embedding = progression_embedding
-        input_data_add = tf.gather(input_data_value,indices=list(np.array(range(input_data.shape[1]-1))+1),axis=1)
+        input_data_add = tf.gather(input_data,indices=list(np.array(range(input_data.shape[1]-1))+1),axis=1)
         input_data_add = tf.math.add(input_data_add,progression_embedding)
         self.check_input_data_add = input_data_add
         input_data_init = tf.gather(input_data,indices=[1],axis=1)
         self.check_input_data_init = input_data_init
-        return [tf.concat([input_data_init,input_data_add],axis=1),att_output]
 
+        return [tf.concat([input_data_init,input_data_add],axis=1),att_output]
 
 class feature_embedding_impotance(keras.layers.Layer):
 
@@ -816,7 +816,7 @@ class protatype_ehr():
         )
         #normalization = tfa.layers.WeightNormalization()
         output = forward_1(output)
-        #output = forward_2(output)
+        output = forward_2(output)
         self.check_output_single = output
         output = self.relation_layer(output)
         [output_whole,att_temporal] = self.att_relation_layer(output)
