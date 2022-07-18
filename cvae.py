@@ -124,8 +124,6 @@ class att_temporal(keras.layers.Layer):
 
         return [tf.concat([input_data_init,input_data_add],axis=1),att_output]
 
-
-
 class feature_embedding_impotance(keras.layers.Layer):
 
     def __init__(self, output_dim, **kwargs):
@@ -249,8 +247,8 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
-        #file_path = '/prj0129/tiw4003/Interpolate_data/'
+        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        file_path = '/prj0129/tiw4003/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
