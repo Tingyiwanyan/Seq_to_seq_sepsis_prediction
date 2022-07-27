@@ -285,15 +285,14 @@ class protatype_ehr():
         self.check_batch_embedding_whole = batch_embedding_whole
 
 
-        batch_embedding = tf.expand_dims(batch_embedding, 2)
+        batch_embedding = tf.expand_dims(batch_embedding, 1)
         batch_embedding = tf.broadcast_to(batch_embedding, [batch_embedding.shape[0],
-                                                            batch_embedding.shape[1],
                                                             self.unsupervised_cluster_num,
                                                             self.latent_dim])
 
         self.check_batch_embedding_E = batch_embedding
 
-        check_converge = 100 * np.ones((batch_embedding.shape[0] * batch_embedding.shape[1]))
+        check_converge = 100 * np.ones(batch_embedding.shape[0])
 
         self.check_check_converge = check_converge
 
@@ -307,22 +306,22 @@ class protatype_ehr():
             basis = tf.math.l2_normalize(projection_basis, axis=-1)
             self.check_basis = basis
 
-            basis = tf.expand_dims(basis, 1)
-            basis = tf.broadcast_to(basis, [batch_embedding.shape[0], batch_embedding.shape[1],
+            basis = tf.expand_dims(basis, 0)
+            basis = tf.broadcast_to(basis, [batch_embedding.shape[0],
                                             self.unsupervised_cluster_num,
                                             self.latent_dim])
             basis = tf.cast(basis,tf.float64)
             self.check_basis_E = basis
 
             projection = tf.multiply(batch_embedding, basis)
-            projection = tf.reduce_sum(projection, 3)
+            projection = tf.reduce_sum(projection, 2)
 
             self.check_projection_E = projection
-            max_value_projection = np.argmax(projection, axis=2)
+            max_value_projection = np.argmax(projection, axis=1)
             self.check_max_value_projection = max_value_projection
 
-            projection_basis_whole = tf.reshape(max_value_projection,
-                                                (max_value_projection.shape[0]*max_value_projection.shape[1]))
+            projection_basis_whole = max_value_projection #tf.reshape(max_value_projection,
+                                                #(max_value_projection.shape[0]*max_value_projection.shape[1]))
 
             self.projection_basis_whole = projection_basis_whole
 
