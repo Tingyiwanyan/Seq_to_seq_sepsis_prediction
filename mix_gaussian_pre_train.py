@@ -558,7 +558,7 @@ class protatype_ehr():
             tcn_cohort_whole = self.tcn(self.memory_bank_cohort)[1]
             tcn_control_whole = self.tcn(self.memory_bank_control)[1]
 
-            on_site_extract_cohort_whole = [tcn_cohort_whole[i, np.abs(int(self.memory_bank_cohort[i] - 1)), :] for i
+            on_site_extract_cohort_whole = [tcn_cohort_whole[i, np.abs(int(self.memory_bank_cohort_on_site[i] - 1)), :] for i
                                       in range(self.memory_bank_cohort_on_site.shape[0])]
             on_site_extract_array_cohort_whole = tf.stack(on_site_extract_cohort_whole)
 
