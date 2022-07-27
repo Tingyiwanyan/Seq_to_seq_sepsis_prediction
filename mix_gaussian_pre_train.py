@@ -306,12 +306,7 @@ class protatype_ehr():
             basis = tf.math.l2_normalize(projection_basis, axis=-1)
             self.check_basis = basis
 
-            basis = tf.expand_dims(basis, 0)
-            basis = tf.broadcast_to(basis, [batch_embedding.shape[0],
-                                            self.unsupervised_cluster_num,
-                                            self.latent_dim])
             basis = tf.cast(basis,tf.float64)
-            self.check_basis_E = basis
 
             projection = tf.multiply(batch_embedding, basis)
             projection = tf.reduce_sum(projection, 2)
