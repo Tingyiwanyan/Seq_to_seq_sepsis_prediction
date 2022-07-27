@@ -6,7 +6,7 @@ import pandas as pd
 import json
 from os import listdir
 #from seqehr_origin import seq_seq_ehr
-from cvae import protatype_ehr, projection_temporal, translation_temporal
+from mix_gaussian_pre_train import protatype_ehr#, projection_temporal, translation_temporal
 #from tcn_prospective import seq_seq_ehr
 
 
