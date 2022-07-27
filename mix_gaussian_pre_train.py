@@ -265,7 +265,7 @@ class protatype_ehr():
         loss_batch = tf.math.negative(nomalized_prob_log)
         loss = tf.math.negative(tf.reduce_mean(nomalized_prob_log, 0))
 
-        return loss,loss_batch
+        return loss#loss_batch
 
     def E_step_initial(self,batch_embedding,projection_basis):
         batch_embedding = tf.cast(tf.math.l2_normalize(batch_embedding, axis=1),tf.float64)
@@ -279,8 +279,8 @@ class protatype_ehr():
 
         self.first_check_projection = projection_basis
 
-        batch_embedding_whole = tf.reshape(batch_embedding,(batch_embedding.shape[0]*batch_embedding.shape[1],
-                                                            batch_embedding.shape[2]))
+        batch_embedding_whole = batch_embedding#tf.reshape(batch_embedding,(batch_embedding.shape[0]*batch_embedding.shape[1],
+                                                            #batch_embedding.shape[2]))
 
         self.check_batch_embedding_whole = batch_embedding_whole
 
