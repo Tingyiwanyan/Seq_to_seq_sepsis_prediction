@@ -602,16 +602,18 @@ class protatype_ehr():
                     tcn_temporal_output_cohort = self.tcn(x_batch_train_cohort)
                     tcn_temporal_output_control = self.tcn(x_batch_train_control)
 
-                    self.max_value_projection_cohort, self.semantic_cluster_cohort = \
-                        self.E_step_initial(tcn_temporal_output_cohort, self.init_projection_basis)
-
-                    self.max_value_projection_control, self.semantic_cluster_control = \
-                        self.E_step_initial(tcn_temporal_output_control, self.init_projection_basis)
 
                     self.check_output = tcn_temporal_output
                     last_layer_output = tcn_temporal_output[1]
                     last_layer_output_cohort = tcn_temporal_output_cohort[1]
                     last_layer_output_control = tcn_temporal_output_control[1]
+
+                    self.max_value_projection_cohort, self.semantic_cluster_cohort = \
+                        self.E_step_initial(last_layer_output_cohort, self.init_projection_basis)
+
+                    self.max_value_projection_control, self.semantic_cluster_control = \
+                        self.E_step_initial(last_layer_output_control, self.init_projection_basis)
+
                     on_site_extract = [last_layer_output[i, np.abs(int(on_site_time[i] - 1)), :] for i in
                                        range(on_site_time.shape[0])]
                     on_site_extract_array = tf.stack(on_site_extract)
