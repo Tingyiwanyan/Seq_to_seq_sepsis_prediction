@@ -16,7 +16,7 @@ semantic_positive_sample = 4
 unsupervised_cluster_num = 4
 latent_dim_global = 100
 positive_sample_size = 10
-batch_size = 256
+batch_size = 128
 unsupervised_neg_size = 5
 reconstruct_resolution = 7
 feature_num = 34
@@ -618,9 +618,13 @@ class protatype_ehr():
                                        range(on_site_time.shape[0])]
                     on_site_extract_array = tf.stack(on_site_extract)
 
+                    self.check_on_site_extract = on_site_extract_array
+
                     on_site_extract_cohort = [last_layer_output_cohort[i, np.abs(int(on_site_time_cohort[i]-1)),:] for i
                                               in range(on_site_time_cohort.shape[0])]
                     on_site_extract_array_cohort = tf.stack(on_site_extract_cohort)
+
+
 
                     on_site_extract_control = [last_layer_output_control[i, np.abs(int(on_site_time_control[i]-1)),:] for i
                                                in range(on_site_time_control.shape[0])]
