@@ -268,7 +268,7 @@ class protatype_ehr():
         return loss,loss_batch
 
     def E_step_initial(self,batch_embedding,projection_basis):
-        batch_embedding = tf.math.l2_normalize(batch_embedding, axis=1)
+        batch_embedding = tf.cast(tf.math.l2_normalize(batch_embedding, axis=1),tf.float64)
 
         #projection_basis = projection_basis[0]
         semantic_cluster = []
