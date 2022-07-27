@@ -608,11 +608,6 @@ class protatype_ehr():
                     last_layer_output_cohort = tcn_temporal_output_cohort[1]
                     last_layer_output_control = tcn_temporal_output_control[1]
 
-                    self.max_value_projection_cohort, self.semantic_cluster_cohort = \
-                        self.E_step_initial(last_layer_output_cohort, self.init_projection_basis)
-
-                    self.max_value_projection_control, self.semantic_cluster_control = \
-                        self.E_step_initial(last_layer_output_control, self.init_projection_basis)
 
                     on_site_extract = [last_layer_output[i, np.abs(int(on_site_time[i] - 1)), :] for i in
                                        range(on_site_time.shape[0])]
@@ -629,6 +624,12 @@ class protatype_ehr():
                     on_site_extract_control = [last_layer_output_control[i, np.abs(int(on_site_time_control[i]-1)),:] for i
                                                in range(on_site_time_control.shape[0])]
                     on_site_extract_array_control = tf.stack(on_site_extract_control)
+
+                    self.max_value_projection_cohort, self.semantic_cluster_cohort = \
+                        self.E_step_initial(on_site_extract_array_cohort, self.init_projection_basis)
+
+                    self.max_value_projection_control, self.semantic_cluster_control = \
+                        self.E_step_initial(on_site_extract_array_control, self.init_projection_basis)
 
                     cl_loss = tf.cast(self.info_nce_loss(on_site_extract_array,on_site_extract_array_cohort,
                                               on_site_extract_array_control, y_batch_train),tf.float64)
