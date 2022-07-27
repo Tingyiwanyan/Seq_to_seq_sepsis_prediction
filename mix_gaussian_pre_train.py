@@ -88,8 +88,8 @@ class protatype_ehr():
         initialize orthogonal projection basis
         """
         self.initializer_basis = tf.keras.initializers.Orthogonal()
-        self.init_projection_basis = tf.Variable(
-            self.initializer_basis(shape=(self.unsupervised_cluster_num, self.latent_dim)))
+        self.init_projection_basis = tf.cast(tf.Variable(
+            self.initializer_basis(shape=(self.unsupervised_cluster_num, self.latent_dim))),tf.float64)
 
         self.steps = self.length_train // self.batch_size
         self.lr_decayed_fn = tf.keras.optimizers.schedules.CosineDecay(
