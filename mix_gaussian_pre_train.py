@@ -9,12 +9,13 @@ import numpy as np
 import random
 import pandas as pd
 from tensorflow.keras import regularizers
+from sklearn.linear_model import LogisticRegression
 import tensorflow_addons as tfa
 import umap
 
 semantic_step_global = 6
 semantic_positive_sample = 4
-unsupervised_cluster_num = 3
+unsupervised_cluster_num = 2
 latent_dim_global = 100
 positive_sample_size = 10
 batch_size = 128
@@ -83,7 +84,7 @@ class protatype_ehr():
         self.basis_input = np.ones((self.unsupervised_cluster_num, self.latent_dim))
 
         self.num_cluster_cohort = 30
-        self.num_cluster_control = 128
+        self.num_cluster_control = 30
 
         self.create_memory_bank()
         self.length_train = len(self.train_data)
@@ -284,12 +285,12 @@ class protatype_ehr():
         cluster_basis = tf.math.l2_normalize(cluster_basis, axis=-1)
         #z = tf.cast(z,tf.float32)
         positive_projection = []
-        [positive_projection.append(cluster_basis[i]) for i in value_projection]
+        [positive_projection.append(cluster_basis[int(i)]) for i in value_projection]
         positive_projection = tf.stack(positive_projection)
         self.check_positive_projection = positive_projection
 
-        similarity_score = tf.reduce_sum(tf.multiply(tf.cast(z,tf.float64),
-                                                     tf.cast(positive_projection,tf.float64))/self.tau,-1)
+        similarity_score = tf.math.exp(tf.reduce_sum(tf.multiply(tf.cast(z,tf.float64),
+                                                     tf.cast(positive_projection,tf.float64))/self.tau,-1))
 
         #similarity_score = tf.math.exp(tf.norm(tf.math.subtract(tf.cast(z,tf.float64),
                                                                 #tf.cast(positive_projection,tf.float64)),
@@ -319,7 +320,7 @@ class protatype_ehr():
                                                                  #tf.cast(cluster_basis,tf.float64)),
                                                 #ord='euclidean', axis=-1)/self.tau)
 
-        similarity_score = tf.reduce_sum(similarity_matrix, -1)
+        similarity_score = tf.reduce_sum(tf.math.exp(similarity_matrix), -1)
 
         return similarity_score
 
@@ -821,6 +822,10 @@ class protatype_ehr():
                                        range(tcn_output_cohort_index.shape[0])]
                     on_site_extract_cohort_cluster_array = tf.stack(on_site_extract_cohort_cluster)
                     self.check_on_site_extract_cohort_cluster_array = on_site_extract_cohort_cluster_array
+
+                    semantic_cluster_cohort_whole_ = tf.reduce_mean(on_site_extract_cohort_cluster_array,axis=0)
+                    self.check_semantic_cluster_cohort_whole_ = semantic_cluster_cohort_whole_
+
                     on_site_extract_cohort_cluster = tf.reshape(on_site_extract_cohort_cluster_array,
                                                             [batch_cluster_cohort.shape[0],
                                                              batch_cluster_cohort.shape[1],
@@ -835,7 +840,14 @@ class protatype_ehr():
                         tcn_temporal_output_control[i, np.abs(int(self.memory_bank_control_on_site[int(tcn_output_control_index[i])] - 1)), :] for i in
                         range(tcn_output_control_index.shape[0])]
                     on_site_extract_control_array = tf.stack(on_site_extract_control_cluster)
+
                     self.check_on_site_extract_control_array = on_site_extract_control_array
+
+                    semantic_cluster_control_whole_ = tf.reduce_mean(on_site_extract_control_array,axis=0)
+                    self.check_semantic_cluster_control_whole_ = semantic_cluster_control_whole_
+
+                    semantic_cluster_whole_ = tf.stack([semantic_cluster_control_whole_,semantic_cluster_cohort_whole_])
+                    self.check_semantic_cluster_whole_ = semantic_cluster_whole_
 
                     on_site_extract_control_cluster = tf.reshape(on_site_extract_control_array,
                                                              [batch_cluster_control.shape[0],
@@ -845,7 +857,9 @@ class protatype_ehr():
                     semantic_cluster_control = tf.reduce_mean(on_site_extract_control_cluster,axis=1)
                     self.check_semantic_cluster_control = semantic_cluster_control
 
-
+                    cl_loss = self.info_nce_loss_local(on_site_extract_array,
+                                                       semantic_cluster_whole_,
+                                                       y_batch_train)
                     mse_loss = mse(prior_centers,on_site_extract_array)
 
                     cl_loss_local_cohort = self.info_nce_loss_local(batch_embedding_cohort,
@@ -857,7 +871,7 @@ class protatype_ehr():
                                                                      batch_embedding_control_project)
 
                     #loss = tf.cast(cl_loss_local_control,tf.float64)# + 0.4*tf.cast(mse_loss,tf.float64)
-                    loss = cl_loss_local_control#mse_loss
+                    loss = cl_loss#mse_loss
                     #if epoch % 2 == 1:
                         #loss =progression_loss
 
@@ -876,9 +890,10 @@ class protatype_ehr():
                    # print("Training mse loss cohort(for one batch) at step %d: %.4f"
                           #% (step, float(mse_loss)))
                     print("Training cl_local_cohort(for one batch) at step %d: %.4f"
-                          % (step, float(cl_loss_local_control)))
+                          % (step, float(cl_loss)))
 
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
+                    #print(self.check_semantic_cluster_cohort)
 
                     self.loss_track.append(loss)
 
@@ -1030,6 +1045,32 @@ class protatype_ehr():
 
     def vis_embedding(self,number_vis,min_dist):
 
+        self.lr = LogisticRegression()
+
+        tcn_whole_1 = self.tcn(self.train_data[0:3000, :, :])
+        train_label_1 = self.train_logit[0:3000]
+        train_on_site_whole_1 = self.train_on_site_time[0:3000]
+        on_site_extract_whole_1 = [tcn_whole_1[i, np.abs(int(train_on_site_whole_1[i] - 1)), :] for
+                                        i
+                                        in range(train_on_site_whole_1.shape[0])]
+
+        CL_k_1 = umap.UMAP(min_dist=min_dist, random_state=42,n_components=2).fit_transform(on_site_extract_whole_1)
+        self.lr.fit(CL_k_1, train_label_1)
+
+        b = self.lr.intercept_[0]
+        w1, w2 = self.lr.coef_.T
+        # Calculate the intercept and gradient of the decision boundary.
+        c = -b / w2
+        m = -w1 / w2
+
+        ax = plt.gca()
+        ax.autoscale(False)
+        x_vals = np.array(ax.get_xlim())
+        y_vals_1 = m*x_vals + c
+        self.x_vals = x_vals
+        self.y_vals_1 = y_vals_1
+
+
         tcn_cohort_whole = self.tcn(self.memory_bank_cohort)
         tcn_control_whole = self.tcn(self.memory_bank_control)
 
@@ -1047,16 +1088,23 @@ class protatype_ehr():
         cohort_vis = on_site_extract_array_cohort_whole[0:number_vis]
         control_vis = on_site_extract_array_control_whole[0:number_vis]
 
+        y_label = np.zeros(2*number_vis)
+        y_label[0:number_vis] = 1
         vis_total = tf.concat([cohort_vis,control_vis],axis=0)
 
 
-        CL_k = umap.UMAP(min_dist=min_dist).fit_transform(control_vis)
-        #for i in range(number_vis):
-            #plt.plot(CL_k[i][0], CL_k[i][1], '^:', fillstyle='none',color='green', markersize=5)
-        for i in range(number_vis):
-            plt.plot(CL_k[i+number_vis][0], CL_k[i+number_vis][1], 'o:', fillstyle='none',
-                     color='orange', markersize=5)
+        CL_k = umap.UMAP(min_dist=min_dist,random_state=42,n_components=2).fit_transform(vis_total)
+        self.check_CL_k = CL_k
 
+
+
+        for i in range(number_vis):
+            plt.plot(CL_k[i][0], CL_k[i][1], 'o', fillstyle='full',color='red', markersize=10)
+        for i in range(number_vis):
+            plt.plot(CL_k[i+number_vis][0], CL_k[i+number_vis][1], 'o', fillstyle='full',
+                     color='cyan', markersize=10)
+
+        #plt.plot(x_vals, y_vals_1, '--', c="red")
         # plt.plot(CL_k[-2][0], CL_k[-2][1], 'o', color='yellow', markersize=9)
         # plt.plot(CL_k[-1][0], CL_k[-1][1], 'o', color='green', markersize=9)
 
