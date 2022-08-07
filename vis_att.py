@@ -2,9 +2,9 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 
-with open('temporal_progression_att.npy', 'rb') as f:
+with open('temporal_progression_att_274', 'rb') as f:
     temporal_progression_att = np.load(f)
-with open('final_embedding_att.npy', 'rb') as f:
+with open('final_embedding_att_274', 'rb') as f:
     final_embedding_att = np.load(f)
 
 label_single = ['HR', 'O2Sat', 'Temp', 'SBP', 'MAP', 'DBP', 'Resp', 'EtCO2',
@@ -16,14 +16,14 @@ label_single = ['HR', 'O2Sat', 'Temp', 'SBP', 'MAP', 'DBP', 'Resp', 'EtCO2',
 source_index_single = list(range(34))
 label_whole = []
 #source_ = []
-for i in range(8):
+for i in range(38):
     label_whole = label_whole + label_single
     #source_ = source_ + list(np.add(source_index_single,34*i))
 
 label_whole = label_whole + ['sepsis_on_site']
 #source_ = source_ + [len(source_)]
 
-final_embedding_att = final_embedding_att[8]
+final_embedding_att = final_embedding_att[38]
 relation_on_site = np.where(final_embedding_att == final_embedding_att.max())[0][0]
 
 """
@@ -47,19 +47,16 @@ previous_index = []
 previous_index_next = []
 max_info_index = relation_on_site
 value_single = []
-<<<<<<< HEAD
-for i in range(3):
-=======
+#for i in range(3):
 check_att_values = []
 check_feature_index =[]
-for i in range(5):
->>>>>>> 026d8222ca1a1f16686ecbb1747cd17b5b011fcb
+for i in range(4):
     print(target)
     if i == 0:
-        top_values = np.sort(final_embedding_att)[::-1][0:3]
+        top_values = np.sort(final_embedding_att)[::-1][0:4]
         for k in top_values:
             index_preserve = np.where(final_embedding_att==k)[0][0]
-            source = source + [index_preserve+(7-i)*34]
+            source = source + [index_preserve+(37-i)*34]
             target = target + [len(label_whole)-1]
             value_single = value_single + [k]
             previous_index_next = previous_index_next + [index_preserve]
@@ -73,13 +70,13 @@ for i in range(5):
     else:
         print(previous_index)
         for j in previous_index:
-            top_values = np.sort(temporal_progression_att[7-i][j])[::-1][0:3]
-            check_att_values.append(temporal_progression_att[7-i][j])
-            check_feature_index.append([7-i,j])
+            top_values = np.sort(temporal_progression_att[37-i][j])[::-1][0:4]
+            check_att_values.append(temporal_progression_att[37-i][j])
+            check_feature_index.append([37-i,j])
             for k in top_values:
-                index_preserve = np.where(temporal_progression_att[7-i][j] == k)[0][0]
-                source = source + [index_preserve+(7-i)*34]
-                target = target + [j+(8-i)*34]
+                index_preserve = np.where(temporal_progression_att[37-i][j] == k)[0][0]
+                source = source + [index_preserve+(37-i)*34]
+                target = target + [j+(38-i)*34]
                 value = value + [k]
                 previous_index_next = previous_index_next + [index_preserve]
         previous_index = []
