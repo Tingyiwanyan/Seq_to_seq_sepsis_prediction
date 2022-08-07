@@ -6,7 +6,7 @@ import pandas as pd
 import json
 from os import listdir
 #from seqehr_origin import seq_seq_ehr
-from cvae import protatype_ehr, projection_temporal, translation_temporal
+from mix_gaussian_pre_train import protatype_ehr#, projection_temporal, translation_temporal
 #from tcn_prospective import seq_seq_ehr
 
 
@@ -48,7 +48,7 @@ class read_data():
 
         self.ave_all = [ 8.38230435e+01,  9.75000000e+01,  3.69060000e+01,  1.18333333e+02,
         7.71140148e+01,  5.90000000e+01,  1.81162791e+01,  0.00000000e+00,
-       -2.50000000e-01,  2.43333333e+01,  5.04195804e-01,  7.38666667e+00,
+        2.50000000e-01,  2.43333333e+01,  5.04195804e-01,  7.38666667e+00,
         4.00504808e+01,  9.60000000e+01,  4.20000000e+01,  1.65000000e+01,
         7.70000000e+01,  8.35000000e+00,  1.06000000e+02,  9.00000000e-01,
         1.16250000e+00,  1.25333333e+02,  1.65000000e+00,  2.00000000e+00,
@@ -508,4 +508,4 @@ class read_data():
 if __name__ == "__main__":
     #read_d = read_data()
     #seq = seq_seq_ehr(read_d)
-    seq = protatype_ehr(projection_temporal,translation_temporal)
+    seq = protatype_ehr()

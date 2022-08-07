@@ -2,7 +2,23 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 
+<<<<<<< HEAD
 with open('temporal_progression_att_274', 'rb') as f:
+=======
+with open('C:/Users/tiw4003/seq_data/temporal_progression_att_val', 'rb') as f:
+    temporal_progression_att_whole = np.load(f)
+with open('C:/Users/tiw4003/seq_data/final_embedding_att_val', 'rb') as f:
+    final_embedding_att_whole = np.load(f)
+with open('C:/Users/tiw4003/seq_data/val.npy', 'rb') as f:
+    val_data = np.load(f)
+with open('C:/Users/tiw4003/seq_data/val_on_site_time.npy', 'rb') as f:
+    val_on_site_time = np.load(f)
+with open('C:/Users/tiw4003/seq_data/val_logit.npy', 'rb') as f:
+    val_logit = np.load(f)
+
+
+with open('temporal_progression_att.npy', 'rb') as f:
+>>>>>>> e962376d7624f8ec7c8a375e86a8974a64f45218
     temporal_progression_att = np.load(f)
 with open('final_embedding_att_274', 'rb') as f:
     final_embedding_att = np.load(f)
@@ -32,7 +48,6 @@ label_list = ['cat', 'dog', 'domesticated', 'female', 'male', 'wild']
 source = [0, 0, 1, 3, 4, 4]
 target = [3, 4, 4, 2, 2, 5]
 count = [21, 6, 22, 21, 6, 22]
-
 fig = go.Figure(data=[go.Sankey(
     node = {"label": label_list},
     link = {"source": source, "target": target, "value": count}
