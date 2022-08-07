@@ -12,10 +12,11 @@ from tensorflow.keras import regularizers
 from sklearn.linear_model import LogisticRegression
 import tensorflow_addons as tfa
 import umap
+from sklearn.utils import shuffle
 
 semantic_step_global = 6
-semantic_positive_sample = 4
-unsupervised_cluster_num = 2
+semantic_positive_sample = 3
+unsupervised_cluster_num = 4
 latent_dim_global = 100
 positive_sample_size = 10
 batch_size = 128
@@ -170,15 +171,12 @@ class protatype_ehr():
             index = int(self.train_on_site_time[i])
             ave_train_ = self.train_data[i,index-1,:]
             ave_train[i,:] = ave_train_
-
         self.ave_train = ave_train
-
         ave_val = np.zeros((self.val_data.shape[0], self.val_data.shape[-1]))
         for i in range(self.val_data.shape[0]):
             index = int(self.val_on_site_time[i])
             ave_val_ = self.val_data[i,index-1,:]
             ave_val[i,:] = ave_val_
-
         self.ave_val = ave_val
         """
         self.train_dataset = tf.data.Dataset.from_tensor_slices(
@@ -306,7 +304,6 @@ class protatype_ehr():
         """
         z = tf.expand_dims(z, 1)
         z = tf.broadcast_to(z, [z.shape[0],self.unsupervised_cluster_num,z.shape[-1]])
-
         cluster_basis = tf.expand_dims(cluster_basis, 0)
         cluster_basis = tf.broadcast_to(cluster_basis,
                                            shape=(z.shape[0],
@@ -860,7 +857,7 @@ class protatype_ehr():
                     cl_loss = self.info_nce_loss_local(on_site_extract_array,
                                                        semantic_cluster_whole_,
                                                        y_batch_train)
-                    mse_loss = mse(prior_centers,on_site_extract_array)
+                    mse_loss = tf.cast(mse(prior_centers,on_site_extract_array),tf.float64)
 
                     cl_loss_local_cohort = self.info_nce_loss_local(batch_embedding_cohort,
                                                                     semantic_cluster_cohort,
@@ -871,7 +868,8 @@ class protatype_ehr():
                                                                      batch_embedding_control_project)
 
                     #loss = tf.cast(cl_loss_local_control,tf.float64)# + 0.4*tf.cast(mse_loss,tf.float64)
-                    loss = cl_loss#mse_loss
+                    #loss = 0.4*cl_loss_local_control + 0.4*cl_loss_local_cohort + cl_loss
+                    loss = cl_loss
                     #if epoch % 2 == 1:
                         #loss =progression_loss
 
@@ -887,10 +885,12 @@ class protatype_ehr():
 
                 if step % 20 == 0:
                     #if epoch == 0 or epoch % 2 == 0:
-                   # print("Training mse loss cohort(for one batch) at step %d: %.4f"
-                          #% (step, float(mse_loss)))
-                    print("Training cl_local_cohort(for one batch) at step %d: %.4f"
+                    print("Training cl_loss cohort(for one batch) at step %d: %.4f"
                           % (step, float(cl_loss)))
+                    print("Training cl_local_cohort(for one batch) at step %d: %.4f"
+                          % (step, float(cl_loss_local_cohort)))
+                    print("Training cl_local_control(for one batch) at step %d: %.4f"
+                          % (step, float(cl_loss_local_control)))
 
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
                     #print(self.check_semantic_cluster_cohort)
@@ -1043,33 +1043,7 @@ class protatype_ehr():
 
                     self.loss_track.append(loss)
 
-    def vis_embedding(self,number_vis,min_dist):
-
-        self.lr = LogisticRegression()
-
-        tcn_whole_1 = self.tcn(self.train_data[0:3000, :, :])
-        train_label_1 = self.train_logit[0:3000]
-        train_on_site_whole_1 = self.train_on_site_time[0:3000]
-        on_site_extract_whole_1 = [tcn_whole_1[i, np.abs(int(train_on_site_whole_1[i] - 1)), :] for
-                                        i
-                                        in range(train_on_site_whole_1.shape[0])]
-
-        CL_k_1 = umap.UMAP(min_dist=min_dist, random_state=42,n_components=2).fit_transform(on_site_extract_whole_1)
-        self.lr.fit(CL_k_1, train_label_1)
-
-        b = self.lr.intercept_[0]
-        w1, w2 = self.lr.coef_.T
-        # Calculate the intercept and gradient of the decision boundary.
-        c = -b / w2
-        m = -w1 / w2
-
-        ax = plt.gca()
-        ax.autoscale(False)
-        x_vals = np.array(ax.get_xlim())
-        y_vals_1 = m*x_vals + c
-        self.x_vals = x_vals
-        self.y_vals_1 = y_vals_1
-
+    def vis_embedding(self,number_vis,min_dist,c_num,train_num):
 
         tcn_cohort_whole = self.tcn(self.memory_bank_cohort)
         tcn_control_whole = self.tcn(self.memory_bank_control)
@@ -1086,223 +1060,67 @@ class protatype_ehr():
         on_site_extract_array_control_whole = tf.stack(on_site_extract_control_whole)
 
         cohort_vis = on_site_extract_array_cohort_whole[0:number_vis]
+        self.check_cohort_vis = cohort_vis
         control_vis = on_site_extract_array_control_whole[0:number_vis]
+        self.check_control_vis = control_vis
 
         y_label = np.zeros(2*number_vis)
         y_label[0:number_vis] = 1
         vis_total = tf.concat([cohort_vis,control_vis],axis=0)
+        self.check_vis_total = vis_total
 
 
         CL_k = umap.UMAP(min_dist=min_dist,random_state=42,n_components=2).fit_transform(vis_total)
+        #CL_k = np.array(tf.math.l2_normalize(CL_k, axis=-1))
         self.check_CL_k = CL_k
 
+        """
+        tcn_whole_1 = self.tcn(self.train_data[0:3000, :, :])
+        train_label_1 = self.train_logit[0:3000]
+        train_on_site_whole_1 = self.train_on_site_time[0:3000]
+        on_site_extract_whole_1 = [tcn_whole_1[i, np.abs(int(train_on_site_whole_1[i] - 1)), :] for
+                                   i
+                                   in range(train_on_site_whole_1.shape[0])]
+        
+        CL_k_1 = umap.UMAP(min_dist=min_dist, random_state=42, n_components=2).fit_transform(on_site_extract_whole_1)
+        """
 
+        train_lr_total,train_lr_label = shuffle(CL_k,y_label, random_state=4)
+
+        self.check_train_lr_total = train_lr_total
+        self.check_train_lr_label = train_lr_label
+        x_scale = (CL_k[:, 0].max() - CL_k[:, 0].min()) / 10
+
+        for i in range(c_num):
+            lr = LogisticRegression()
+            lr.fit(train_lr_total[i*train_num:(i+1)*train_num], train_lr_label[i*train_num:(i+1)*train_num])
+
+            b = lr.intercept_[0]
+            w1, w2 = lr.coef_.T
+            # Calculate the intercept and gradient of the decision boundary.
+            c = -b / w2
+            m = -w1 / w2
+
+            # ax = plt.gca()
+            # ax.autoscale(True)
+            x_vals = np.array([CL_k[:,0].min()-x_scale, CL_k[:,0].max()]+x_scale)
+            y_vals_1 = m * x_vals + c
+            plt.plot(x_vals, y_vals_1, '--', c="black", linewidth=1.5)
+
+        #plt.scatter(CL_k[:,0],CL_k[:,1])
 
         for i in range(number_vis):
-            plt.plot(CL_k[i][0], CL_k[i][1], 'o', fillstyle='full',color='red', markersize=10)
+            plt.plot(CL_k[i][0], CL_k[i][1], '.', fillstyle='none',color='red', markersize=2)
         for i in range(number_vis):
-            plt.plot(CL_k[i+number_vis][0], CL_k[i+number_vis][1], 'o', fillstyle='full',
-                     color='cyan', markersize=10)
+            plt.plot(CL_k[i+number_vis][0], CL_k[i+number_vis][1], '.', fillstyle='none',
+                      color='blue', markersize=2)
 
-        #plt.plot(x_vals, y_vals_1, '--', c="red")
+
         # plt.plot(CL_k[-2][0], CL_k[-2][1], 'o', color='yellow', markersize=9)
         # plt.plot(CL_k[-1][0], CL_k[-1][1], 'o', color='green', markersize=9)
 
+
+        plt.xlim([CL_k[:,0].min()-x_scale,CL_k[:,0].max()+x_scale])
+        y_scale = (CL_k[:,1].max()-CL_k[:,1].min())/8
+        plt.ylim([CL_k[:, 1].min()-y_scale , CL_k[:, 1].max()+y_scale])
         plt.show()
-
-
-
-    def train_cl(self):
-        # input = layers.Input((self.time_sequence, self.feature_num))
-        self.tcn = self.tcn_encoder_second_last_level()
-        self.auc_all = []
-        self.loss_track = []
-        # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
-        self.projection_layer = self.project_logit()
-        self.bceloss = tf.keras.losses.BinaryCrossentropy()
-        # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
-
-        for epoch in range(self.pre_train_epoch):
-            print("\nStart of epoch %d" % (epoch,))
-            #input_translation = np.ones(self.latent_dim)
-
-            # extract_val, global_val,k = self.model_extractor(self.val_data)
-            tcn_temporal_output_val = self.tcn(self.val_data)
-            last_layer_output_val = tcn_temporal_output_val
-            on_site_extract_val = [last_layer_output_val[i, np.abs(int(self.val_on_site_time[i]) - 1), :] for i in
-                                   range(self.val_on_site_time.shape[0])]
-            on_site_extract_array_val = tf.stack(on_site_extract_val)
-            prediction_val = self.projection_layer(on_site_extract_array_val)
-            self.check_prediction_val = prediction_val
-            val_acc = roc_auc_score(self.val_logit, prediction_val)
-            print("auc")
-            print(val_acc)
-            self.auc_all.append(val_acc)
-
-
-            tcn_cohort_whole = self.tcn(self.memory_bank_cohort)
-            tcn_control_whole = self.tcn(self.memory_bank_control)
-
-            on_site_extract_cohort_whole = [tcn_cohort_whole[i, np.abs(int(self.memory_bank_cohort_on_site[i] - 1)), :] for i
-                                      in range(self.memory_bank_cohort_on_site.shape[0])]
-            on_site_extract_array_cohort_whole = tf.stack(on_site_extract_cohort_whole)
-
-            on_site_extract_control_whole = [tcn_control_whole[i, np.abs(int(self.memory_bank_control_on_site[i] - 1)), :] for i
-                                       in range(self.memory_bank_control_on_site.shape[0])]
-
-            on_site_extract_array_control_whole = tf.stack(on_site_extract_control_whole)
-
-            self.max_value_projection_cohort, self.semantic_cluster_cohort = \
-                self.E_step_initial(on_site_extract_array_cohort_whole)
-
-            self.max_value_projection_control, self.semantic_cluster_control = \
-                self.E_step_initial(on_site_extract_array_control_whole)
-
-            """
-            tcn_temporal_output_whole = self.tcn(self.train_data)
-            output_1h_resolution_whole = tcn_temporal_output_whole[5]
-            # on_site_extract_whole = [last_layer_output[i, np.abs(int(self.train_on_site_time[i] - 1)), :] for i in
-            # range(self.train_on_site_time.shape[0])]
-
-            temporal_semantic_whole, sample_sequence_batch_whole, temporal_semantic_origin_whole = \
-                self.extract_temporal_semantic(output_1h_resolution_whole, self.train_on_site_time, self.train_data)
-
-            self.check_temporal_semantic_whole = temporal_semantic_whole
-            self.check_sample_sequence_batch_whole = sample_sequence_batch_whole
-            self.check_temporal_semantic_origin_whole = temporal_semantic_origin_whole
-
-            order_input_total_init, projection_cluster = \
-                self.E_step_initial(temporal_semantic_whole, self.init_projection_basis, temporal_semantic_origin_whole)
-
-            self.check_order_input_total_init = order_input_total_init
-            self.check_projection_group_total = projection_cluster
-            """
-
-            for step, (x_batch_train, y_batch_train, on_site_time) in enumerate(self.train_dataset):
-                self.check_x_batch = x_batch_train
-                self.check_on_site_time = on_site_time
-                self.check_label = y_batch_train
-
-                #self.check_semantic_origin = semantic_origin
-                identity_input_translation = np.zeros((x_batch_train.shape[0],self.latent_dim))
-
-                random_indices_cohort = np.random.choice(self.num_cohort, size=x_batch_train.shape[0], replace=False)
-                random_indices_control = np.random.choice(self.num_control, size=x_batch_train.shape[0], replace=False)
-
-                x_batch_train_cohort = self.memory_bank_cohort[random_indices_cohort, :, :]
-                x_batch_train_control = self.memory_bank_control[random_indices_control, :, :]
-                on_site_time_cohort = self.memory_bank_cohort_on_site[random_indices_cohort]
-                on_site_time_control = self.memory_bank_control_on_site[random_indices_control]
-
-
-                with tf.GradientTape() as tape:
-                    tcn_temporal_output = self.tcn(x_batch_train)
-                    tcn_temporal_output_cohort = self.tcn(x_batch_train_cohort)
-                    tcn_temporal_output_control = self.tcn(x_batch_train_control)
-
-                    self.check_output = tcn_temporal_output
-                    last_layer_output = tcn_temporal_output
-                    last_layer_output_cohort = tcn_temporal_output_cohort
-                    last_layer_output_control = tcn_temporal_output_control
-
-
-                    on_site_extract = [last_layer_output[i, np.abs(int(on_site_time[i] - 1)), :] for i in
-                                       range(on_site_time.shape[0])]
-                    on_site_extract_array = tf.stack(on_site_extract)
-
-                    self.check_on_site_extract = on_site_extract_array
-
-                    on_site_extract_cohort = [last_layer_output_cohort[i, np.abs(int(on_site_time_cohort[i]-1)),:] for i
-                                              in range(on_site_time_cohort.shape[0])]
-                    on_site_extract_array_cohort = tf.stack(on_site_extract_cohort)
-
-
-
-                    on_site_extract_control = [last_layer_output_control[i, np.abs(int(on_site_time_control[i]-1)),:] for i
-                                               in range(on_site_time_control.shape[0])]
-                    on_site_extract_array_control = tf.stack(on_site_extract_control)
-
-                    value_projection_cohort, value_projection_control, \
-                    batch_embedding_cohort, batch_embedding_control = \
-                        self.E_find_cluster(on_site_extract_array, self.semantic_cluster_cohort,
-                                       self.semantic_cluster_control, y_batch_train)
-
-                    self.check_value_projection_cohort = value_projection_cohort
-                    self.check_value_projection_control = value_projection_control
-                    self.check_batch_embedding_cohort = batch_embedding_cohort
-                    self.check_batch_embedding_control = batch_embedding_control
-
-                    prediction = self.projection_layer(on_site_extract_array)
-                    loss_pred = tf.cast(self.bceloss(y_batch_train, prediction),tf.float64)
-
-                    cl_loss_local_cohort = self.info_nce_loss_local(batch_embedding_cohort,self.semantic_cluster_cohort,
-                                                                    value_projection_cohort)
-
-                    cl_loss_local_control = self.info_nce_loss_local(batch_embedding_control,
-                                                                    self.semantic_cluster_control,
-                                                                    value_projection_control)
-
-                    cl_loss = tf.cast(self.info_nce_loss(on_site_extract_array,on_site_extract_array_cohort,
-                                              on_site_extract_array_control, y_batch_train),tf.float64)
-
-                    #cl_loss_temporal = self.info_nce_loss(temporal_semantic_transit,temporal_semantic_cohort_transit,
-                                                          #temporal_semantic_control_transit, y_batch_train)
-
-                    #progression_loss = self.info_nce_loss_progression(temporal_semantic_transit,on_site_extract_array,
-                                                                      #on_site_extract_array_cohort,
-                                                                      #on_site_extract_array_control, y_batch_train)
-                    #if epoch < 2:
-                    #if epoch == 0 or epoch % 2 == 0:
-                    loss =  cl_loss#cl_loss_local_cohort + cl_loss_local_control
-
-                    #if epoch % 2 == 1:
-                        #loss =progression_loss
-
-                #if epoch == 0 or epoch % 2 == 0:
-                gradients = \
-                    tape.gradient(loss,
-                                  self.tcn.trainable_variables)#+ self.projection_layer.trainable_weights)
-                                  #+self.deconv.trainable_variables)
-                optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
-
-                optimizer.apply_gradients(zip(gradients,
-                                              self.tcn.trainable_variables))#+ self.projection_layer.trainable_weights))
-
-                if step % 20 == 0:
-                    #if epoch == 0 or epoch % 2 == 0:
-                    print("Training cl loss local cohort(for one batch) at step %d: %.4f"
-                          % (step, float(cl_loss_local_cohort)))
-                    print("Training cl loss local control(for one batch) at step %d: %.4f"
-                          % (step, float(cl_loss_local_control)))
-                    print("Training cl loss(for one batch) at step %d: %.4f"
-                          % (step, float(cl_loss)))
-                    #print("Training cl_loss_temporal(for one batch) at step %d: %.4f"
-                     #     % (step, float(cl_loss_temporal)))
-                    #print("Training progression_loss(for one batch) at step %d: %.4f"
-                      #    % (step, float(progression_loss)))
-                    print("seen so far: %s samples" % ((step + 1) * self.batch_size))
-
-                    self.loss_track.append(loss)
-                """
-                if step % 80 == 0:
-                    tcn_cohort_whole = self.tcn(self.memory_bank_cohort)[1]
-                    tcn_control_whole = self.tcn(self.memory_bank_control)[1]
-
-                    on_site_extract_cohort_whole = [
-                        tcn_cohort_whole[i, np.abs(int(self.memory_bank_cohort_on_site[i] - 1)), :] for i
-                        in range(self.memory_bank_cohort_on_site.shape[0])]
-                    on_site_extract_array_cohort_whole = tf.stack(on_site_extract_cohort_whole)
-
-                    on_site_extract_control_whole = [
-                        tcn_control_whole[i, np.abs(int(self.memory_bank_control_on_site[i] - 1)), :] for i
-                        in range(self.memory_bank_control_on_site.shape[0])]
-
-                    on_site_extract_array_control_whole = tf.stack(on_site_extract_control_whole)
-
-                    self.max_value_projection_cohort, self.semantic_cluster_cohort = \
-                        self.E_step_initial(on_site_extract_array_cohort_whole)
-
-                    self.max_value_projection_control, self.semantic_cluster_control = \
-                        self.E_step_initial(on_site_extract_array_control_whole)
-                """
-
