@@ -13,10 +13,11 @@ from sklearn.linear_model import LogisticRegression
 import tensorflow_addons as tfa
 import umap
 from sklearn.utils import shuffle
+import seaborn as sns
 
 semantic_step_global = 6
 semantic_positive_sample = 3
-unsupervised_cluster_num = 4
+unsupervised_cluster_num = 3
 latent_dim_global = 100
 positive_sample_size = 10
 batch_size = 128
@@ -134,8 +135,9 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
         #file_path = '/prj0129/tiw4003/Interpolate_data/'
+        file_path = '/Users/tingyi/Downloads/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -868,8 +870,8 @@ class protatype_ehr():
                                                                      batch_embedding_control_project)
 
                     #loss = tf.cast(cl_loss_local_control,tf.float64)# + 0.4*tf.cast(mse_loss,tf.float64)
-                    #loss = 0.4*cl_loss_local_control + 0.4*cl_loss_local_cohort + cl_loss
-                    loss = cl_loss
+                    loss = 0.4*cl_loss_local_control + 0.4*cl_loss_local_cohort + cl_loss
+                    #loss = cl_loss
                     #if epoch % 2 == 1:
                         #loss =progression_loss
 
@@ -897,96 +899,6 @@ class protatype_ehr():
 
                     self.loss_track.append(loss)
 
-
-
-    def train_standard_forward(self):
-        self.tcn = self.tcn_encoder_second_last_level()
-        # tcn = self.tcn(input)
-        self.auc_all = []
-        self.loss_track = []
-        # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
-        self.projection_layer = self.project_logit()
-        self.bceloss = tf.keras.losses.BinaryCrossentropy()
-
-        for epoch in range(self.pre_train_epoch):
-            print("\nStart of epoch %d" % (epoch,))
-
-            # extract_val, global_val,k = self.model_extractor(self.val_data)
-            tcn_temporal_output_val = self.tcn(self.ave_val)
-            on_site_extract_array_val = tf.stack(tcn_temporal_output_val)
-            prediction_val = self.projection_layer(on_site_extract_array_val)
-            self.check_prediction_val = prediction_val
-            val_acc = roc_auc_score(self.val_logit, prediction_val)
-            print("auc")
-            print(val_acc)
-            self.auc_all.append(val_acc)
-
-            tcn_cohort_whole = self.tcn(self.memory_bank_cohort)
-            tcn_control_whole = self.tcn(self.memory_bank_control)
-
-            self.max_value_projection_cohort, self.semantic_cluster_cohort = \
-                self.E_step_initial(tcn_cohort_whole)
-
-            self.max_value_projection_control, self.semantic_cluster_control = \
-                self.E_step_initial(tcn_control_whole)
-
-            for step, (x_batch_train, y_batch_train, on_site_time) in enumerate(self.train_dataset):
-
-                random_indices_cohort = np.random.choice(self.num_cohort, size=x_batch_train.shape[0], replace=False)
-                random_indices_control = np.random.choice(self.num_control, size=x_batch_train.shape[0], replace=False)
-
-                x_batch_train_cohort = self.memory_bank_cohort[random_indices_cohort, :]
-                x_batch_train_control = self.memory_bank_control[random_indices_control, :]
-
-                self.check_x_batch = x_batch_train
-                self.check_on_site_time = on_site_time
-                self.check_label = y_batch_train
-                with tf.GradientTape() as tape:
-                    tcn_temporal_output = self.tcn(x_batch_train)
-                    tcn_temporal_output_cohort = self.tcn(x_batch_train_cohort)
-                    tcn_temporal_output_control = self.tcn(x_batch_train_control)
-                    prediction = self.projection_layer(tcn_temporal_output)
-                    #loss = self.bceloss(y_batch_train, prediction)
-                    loss_cl = tf.cast(self.info_nce_loss(tcn_temporal_output, tcn_temporal_output_cohort,
-                                                         tcn_temporal_output_control, y_batch_train), tf.float64)
-
-                    value_projection_cohort, value_projection_control, \
-                    batch_embedding_cohort, batch_embedding_control = \
-                        self.E_find_cluster(tcn_temporal_output, self.semantic_cluster_cohort,
-                                            self.semantic_cluster_control, y_batch_train)
-
-                    self.check_value_projection_cohort = value_projection_cohort
-                    self.check_value_projection_control = value_projection_control
-                    self.check_batch_embedding_cohort = batch_embedding_cohort
-                    self.check_batch_embedding_control = batch_embedding_control
-
-                    cl_loss_local_cohort = self.info_nce_loss_local(batch_embedding_cohort,
-                                                                    self.semantic_cluster_cohort,
-                                                                    value_projection_cohort)
-
-                    cl_loss_local_control = self.info_nce_loss_local(batch_embedding_control,
-                                                                     self.semantic_cluster_control,
-                                                                     value_projection_control)
-
-                    loss = loss_cl #+ cl_loss_local_control
-                    self.check_prediction = prediction
-
-                gradients = \
-                    tape.gradient(loss,
-                                  self.tcn.trainable_variables)# + self.projection_layer.trainable_weights)
-                optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr_schedule)
-
-                optimizer.apply_gradients(zip(gradients,
-                                              self.tcn.trainable_variables))# + self.projection_layer.trainable_weights))
-
-                if step % 20 == 0:
-                    print("Training loss(for one batch) at step %d: %.4f"
-                          % (step, float(loss_cl)))
-                    print("Training loss(for one batch) at step %d: %.4f"
-                          % (step, float(loss_cl_control)))
-                    print("seen so far: %s samples" % ((step + 1) * self.batch_size))
-
-                    self.loss_track.append(loss)
 
     def train_standard(self):
         # input = layers.Input((self.time_sequence, self.feature_num))
@@ -1042,6 +954,40 @@ class protatype_ehr():
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
 
                     self.loss_track.append(loss)
+
+
+    def vis_distribution(self,number_vis,min_dist,c_num,train_num):
+        tcn_cohort_whole = self.tcn(self.memory_bank_cohort)
+        tcn_control_whole = self.tcn(self.memory_bank_control)
+
+        on_site_extract_cohort_whole = [tcn_cohort_whole[i, np.abs(int(self.memory_bank_cohort_on_site[i] - 1)), :] for
+                                        i
+                                        in range(self.memory_bank_cohort_on_site.shape[0])]
+        on_site_extract_array_cohort_whole = tf.stack(on_site_extract_cohort_whole)
+
+        on_site_extract_control_whole = [tcn_control_whole[i, np.abs(int(self.memory_bank_control_on_site[i] - 1)), :]
+                                         for i
+                                         in range(self.memory_bank_control_on_site.shape[0])]
+
+        on_site_extract_array_control_whole = tf.stack(on_site_extract_control_whole)
+
+        cohort_vis = on_site_extract_array_cohort_whole[0:number_vis]
+        self.check_cohort_vis = cohort_vis
+        control_vis = on_site_extract_array_control_whole[0:number_vis]
+        self.check_control_vis = control_vis
+
+        y_label = np.zeros(2*number_vis)
+        y_label[0:number_vis] = 1
+        vis_total = tf.concat([cohort_vis,control_vis],axis=0)
+        self.check_vis_total = vis_total
+
+
+        CL_k = umap.UMAP(min_dist=min_dist,random_state=42,n_components=1).fit_transform(vis_total)
+        #CL_k = np.array(tf.math.l2_normalize(CL_k, axis=-1))
+        self.check_CL_k = CL_k
+
+
+
 
     def vis_embedding(self,number_vis,min_dist,c_num,train_num):
 
