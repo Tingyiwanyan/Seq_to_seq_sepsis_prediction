@@ -1019,7 +1019,7 @@ class protatype_ehr():
             #x_vals = np.array([CL_k[:,0].min()-x_scale, CL_k[:,0].max()]+x_scale)
             #y_vals_1 = m * x_vals + c
             y_vals = np.array([0,0.07])
-            plt.plot(x_vals, y_vals, '--', c="black", linewidth=1.5)
+            plt.plot(x_vals, y_vals, '--', c="black", linewidth=3)
 
         plt.show()
 
