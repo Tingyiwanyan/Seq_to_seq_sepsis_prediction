@@ -870,7 +870,7 @@ class protatype_ehr():
                                                                      batch_embedding_control_project)
 
                     #loss = tf.cast(cl_loss_local_control,tf.float64)# + 0.4*tf.cast(mse_loss,tf.float64)
-                    loss = 0.4*cl_loss_local_control + 0.4*cl_loss_local_cohort + cl_loss
+                    loss = 0.5*cl_loss_local_control + 0.5*cl_loss_local_cohort + cl_loss
                     #loss = cl_loss
                     #if epoch % 2 == 1:
                         #loss =progression_loss
@@ -972,19 +972,56 @@ class protatype_ehr():
         on_site_extract_array_control_whole = tf.stack(on_site_extract_control_whole)
 
         cohort_vis = on_site_extract_array_cohort_whole[0:number_vis]
+        label_cohort_vis = self.max_value_projection_cohort[0:number_vis]
         self.check_cohort_vis = cohort_vis
         control_vis = on_site_extract_array_control_whole[0:number_vis]
+        label_control_vis = self.max_value_projection_control[0:number_vis]+self.unsupervised_cluster_num
         self.check_control_vis = control_vis
 
         y_label = np.zeros(2*number_vis)
         y_label[0:number_vis] = 1
         vis_total = tf.concat([cohort_vis,control_vis],axis=0)
+        y_label_cluster = tf.concat([label_cohort_vis,label_control_vis],axis=0)
         self.check_vis_total = vis_total
 
-
-        CL_k = umap.UMAP(min_dist=min_dist,random_state=42,n_components=1).fit_transform(vis_total)
+        CL_k = np.squeeze(umap.UMAP(min_dist=min_dist,random_state=42,n_components=1).fit_transform(vis_total))
+        CL_k = (CL_k - CL_k.min())/56
         #CL_k = np.array(tf.math.l2_normalize(CL_k, axis=-1))
         self.check_CL_k = CL_k
+        CL_k_fit = np.expand_dims(CL_k,1)
+
+        dataframe = np.transpose(np.stack([y_label_cluster,CL_k]))
+        self.check_dataframe = dataframe
+
+        df = pd.DataFrame(dataframe,columns=['label','Embedding'])
+
+
+        self.check_df = df
+
+        sns.displot(df,x='Embedding',hue='label',kind='kde',palette=['b','b','b','r','r','r'])
+
+        train_lr_total,train_lr_label = shuffle(CL_k_fit,y_label, random_state=4)
+        self.c_total = []
+        for i in range(c_num):
+            lr = LogisticRegression()
+            lr.fit(train_lr_total[i*train_num:(i+1)*train_num], train_lr_label[i*train_num:(i+1)*train_num])
+            #lr.fit(CL_k_fit, y_label)
+
+            b = lr.intercept_[0]
+            w = lr.coef_[0][0]
+            # Calculate the intercept and gradient of the decision boundary.
+            c = -b / w
+            self.c_total.append(c)
+
+            # ax = plt.gca()
+            # ax.autoscale(True)
+            x_vals = np.array([c,c])
+            #x_vals = np.array([CL_k[:,0].min()-x_scale, CL_k[:,0].max()]+x_scale)
+            #y_vals_1 = m * x_vals + c
+            y_vals = np.array([0,0.07])
+            plt.plot(x_vals, y_vals, '--', c="black", linewidth=1.5)
+
+        plt.show()
 
 
 
