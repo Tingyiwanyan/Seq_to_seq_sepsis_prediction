@@ -17,7 +17,7 @@ import seaborn as sns
 
 semantic_step_global = 6
 semantic_positive_sample = 3
-unsupervised_cluster_num = 3
+unsupervised_cluster_num = 4
 latent_dim_global = 100
 positive_sample_size = 10
 batch_size = 128
@@ -135,9 +135,9 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
         #file_path = '/prj0129/tiw4003/Interpolate_data/'
-        file_path = '/Users/tingyi/Downloads/Interpolate_data/'
+        #file_path = '/Users/tingyi/Downloads/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -870,7 +870,7 @@ class protatype_ehr():
                                                                      batch_embedding_control_project)
 
                     #loss = tf.cast(cl_loss_local_control,tf.float64)# + 0.4*tf.cast(mse_loss,tf.float64)
-                    loss = 0.5*cl_loss_local_control + 0.5*cl_loss_local_cohort + cl_loss
+                    loss = 0.4*cl_loss_local_control + 0.4*cl_loss_local_cohort + cl_loss
                     #loss = cl_loss
                     #if epoch % 2 == 1:
                         #loss =progression_loss
@@ -956,7 +956,7 @@ class protatype_ehr():
                     self.loss_track.append(loss)
 
 
-    def vis_distribution(self,number_vis,min_dist,c_num,train_num):
+    def vis_distribution(self,number_vis,min_dist,c_num,train_num,scale):
         tcn_cohort_whole = self.tcn(self.memory_bank_cohort)
         tcn_control_whole = self.tcn(self.memory_bank_control)
 
@@ -984,13 +984,14 @@ class protatype_ehr():
         y_label_cluster = tf.concat([label_cohort_vis,label_control_vis],axis=0)
         self.check_vis_total = vis_total
 
-        CL_k = np.squeeze(umap.UMAP(min_dist=min_dist,random_state=42,n_components=1).fit_transform(vis_total))
-        CL_k = (CL_k - CL_k.min())/56
+        CL_k = np.squeeze(umap.UMAP(min_dist=min_dist,random_state=42,n_components=1).fit_transform(vis_total))/scale
+        #CL_k = (CL_k - CL_k.min())/56
         #CL_k = np.array(tf.math.l2_normalize(CL_k, axis=-1))
         self.check_CL_k = CL_k
         CL_k_fit = np.expand_dims(CL_k,1)
 
         dataframe = np.transpose(np.stack([y_label_cluster,CL_k]))
+        #dataframe = np.transpose(np.stack([y_label, CL_k]))
         self.check_dataframe = dataframe
 
         df = pd.DataFrame(dataframe,columns=['label','Embedding'])
@@ -999,6 +1000,8 @@ class protatype_ehr():
         self.check_df = df
 
         sns.displot(df,x='Embedding',hue='label',kind='kde',palette=['b','b','b','r','r','r'])
+
+        #sns.displot(df, x='Embedding', hue='label', kind='kde', palette=['b','r'])
 
         train_lr_total,train_lr_label = shuffle(CL_k_fit,y_label, random_state=4)
         self.c_total = []
@@ -1018,9 +1021,16 @@ class protatype_ehr():
             x_vals = np.array([c,c])
             #x_vals = np.array([CL_k[:,0].min()-x_scale, CL_k[:,0].max()]+x_scale)
             #y_vals_1 = m * x_vals + c
+<<<<<<< HEAD
             y_vals = np.array([0,0.07])
             plt.plot(x_vals, y_vals, '--', c="black", linewidth=3)
+=======
+            y_vals = np.array([0,1])
+            plt.plot(x_vals, y_vals, '--', c="black", linewidth=1.5)
+>>>>>>> 6332b4067a46cfdc4f7b209871d9beac15689a72
 
+        #plt.ylim(0,1)
+        #plt.xlim(0,1)
         plt.show()
 
 
