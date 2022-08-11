@@ -14,10 +14,11 @@ import tensorflow_addons as tfa
 import umap
 from sklearn.utils import shuffle
 import seaborn as sns
+from scipy.stats import norm
 
 semantic_step_global = 6
 semantic_positive_sample = 3
-unsupervised_cluster_num = 4
+unsupervised_cluster_num = 3
 latent_dim_global = 100
 positive_sample_size = 10
 batch_size = 128
@@ -135,9 +136,9 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
         #file_path = '/prj0129/tiw4003/Interpolate_data/'
-        #file_path = '/Users/tingyi/Downloads/Interpolate_data/'
+        file_path = '/Users/tingyi/Downloads/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -690,6 +691,7 @@ class protatype_ehr():
             self.max_value_projection_control, self.semantic_cluster_control = \
                 self.E_step_initial(on_site_extract_array_control_whole)
 
+        
             self.cluster_cohort = []
             self.cluster_control = []
             self.cluster_cohort_index = []
@@ -870,7 +872,7 @@ class protatype_ehr():
                                                                      batch_embedding_control_project)
 
                     #loss = tf.cast(cl_loss_local_control,tf.float64)# + 0.4*tf.cast(mse_loss,tf.float64)
-                    loss = 0.4*cl_loss_local_control + 0.4*cl_loss_local_cohort + cl_loss
+                    loss = 0.3*cl_loss_local_control + 0.3*cl_loss_local_cohort + cl_loss
                     #loss = cl_loss
                     #if epoch % 2 == 1:
                         #loss =progression_loss
@@ -956,6 +958,104 @@ class protatype_ehr():
                     self.loss_track.append(loss)
 
 
+    def vis_hist(self,number_vis,min_dist,c_num,train_num,scale):
+        tcn_cohort_whole = self.tcn(self.memory_bank_cohort)
+        tcn_control_whole = self.tcn(self.memory_bank_control)
+
+        on_site_extract_cohort_whole = [tcn_cohort_whole[i, np.abs(int(self.memory_bank_cohort_on_site[i] - 1)), :] for
+                                        i
+                                        in range(self.memory_bank_cohort_on_site.shape[0])]
+        on_site_extract_array_cohort_whole = tf.stack(on_site_extract_cohort_whole)
+
+        on_site_extract_control_whole = [tcn_control_whole[i, np.abs(int(self.memory_bank_control_on_site[i] - 1)), :]
+                                         for i
+                                         in range(self.memory_bank_control_on_site.shape[0])]
+
+        on_site_extract_array_control_whole = tf.stack(on_site_extract_control_whole)
+
+        cohort_vis = on_site_extract_array_cohort_whole[0:number_vis]
+        label_cohort_vis = self.max_value_projection_cohort[0:number_vis]
+        self.check_cohort_vis = cohort_vis
+        control_vis = on_site_extract_array_control_whole[0:number_vis]
+        label_control_vis = self.max_value_projection_control[0:number_vis]+self.unsupervised_cluster_num
+        self.check_control_vis = control_vis
+
+        y_label = np.zeros(2*number_vis)
+        y_label[0:number_vis] = 1
+        vis_total = tf.concat([cohort_vis,control_vis],axis=0)
+        y_label_cluster = tf.concat([label_cohort_vis,label_control_vis],axis=0)
+        self.check_vis_total = vis_total
+
+        CL_k = np.squeeze(umap.UMAP(min_dist=min_dist,random_state=42,n_components=1).fit_transform(vis_total))/scale
+        #CL_k = (CL_k - CL_k.min())/56
+        #CL_k = np.array(tf.math.l2_normalize(CL_k, axis=-1))
+        self.check_CL_k = CL_k
+
+        self.mean_cohort = []
+        self.std_cohort = []
+        self.mean_control = []
+        self.std_control = []
+
+        for i in range(self.unsupervised_cluster_num):
+            single_cohort = []
+            single_control = []
+            singel_cohort_index = np.where(y_label_cluster == i)[0]
+            [single_cohort.append(CL_k[i]) for i in single_cohort_index]
+            mean_single_cohort = np.mean(single_cohort)
+            std_single_cohort = np.std(single_cohort)
+            self.mean_cohort.append(mean_single_cohort)
+            self.std_cohort.append(std_single_cohort)
+
+            single_control_index = np.where(y_label_cluster == i+self.unsupervised_cluster_num)[0]
+            [single_control.append(CL_k[i]) for i in single_control_index]
+            mean_single_control = np.mean(single_control)
+            std_single_control = np.std(single_control)
+            self.mean_control.append(mean_single_control)
+            self.std_control.append(std_single_control)
+
+
+        CL_k_fit = np.expand_dims(CL_k,1)
+
+        dataframe = np.transpose(np.stack([y_label_cluster,CL_k]))
+        #dataframe = np.transpose(np.stack([y_label, CL_k]))
+        self.check_dataframe = dataframe
+
+        df = pd.DataFrame(dataframe,columns=['label','Embedding'])
+
+
+        self.check_df = df
+        sns.set_style("whitegrid")
+
+        sns.displot(df,x='Embedding',hue='label',kind='kde',palette=['b','b','b','r','r','r'])
+
+        #sns.displot(df, x='Embedding', hue='label', kind='kde', palette=['b','r'])
+
+        train_lr_total,train_lr_label = shuffle(CL_k_fit,y_label, random_state=4)
+        self.c_total = []
+        for i in range(c_num):
+            lr = LogisticRegression()
+            lr.fit(train_lr_total[i*train_num:(i+1)*train_num], train_lr_label[i*train_num:(i+1)*train_num])
+            #lr.fit(CL_k_fit, y_label)
+
+            b = lr.intercept_[0]
+            w = lr.coef_[0][0]
+            # Calculate the intercept and gradient of the decision boundary.
+            c = -b / w
+            self.c_total.append(c)
+
+            # ax = plt.gca()
+            # ax.autoscale(True)
+            x_vals = np.array([c,c])
+            #x_vals = np.array([CL_k[:,0].min()-x_scale, CL_k[:,0].max()]+x_scale)
+            #y_vals_1 = m * x_vals + c
+
+            y_vals = np.array([0,0.07])
+            plt.plot(x_vals, y_vals, '--', c="black", linewidth=3)
+
+        #plt.ylim(0,1)
+        #plt.xlim(0,1)
+        plt.show()
+     
     def vis_distribution(self,number_vis,min_dist,c_num,train_num,scale):
         tcn_cohort_whole = self.tcn(self.memory_bank_cohort)
         tcn_control_whole = self.tcn(self.memory_bank_control)
@@ -988,20 +1088,39 @@ class protatype_ehr():
         #CL_k = (CL_k - CL_k.min())/56
         #CL_k = np.array(tf.math.l2_normalize(CL_k, axis=-1))
         self.check_CL_k = CL_k
-        CL_k_fit = np.expand_dims(CL_k,1)
 
-        dataframe = np.transpose(np.stack([y_label_cluster,CL_k]))
-        #dataframe = np.transpose(np.stack([y_label, CL_k]))
-        self.check_dataframe = dataframe
+        self.mean_cohort = []
+        self.std_cohort = []
+        self.mean_control = []
+        self.std_control = []
 
-        df = pd.DataFrame(dataframe,columns=['label','Embedding'])
+        sns.set_style("whitegrid")
+        for i in range(self.unsupervised_cluster_num):
+            single_cohort = []
+            single_control = []
+            single_cohort_index = np.where(y_label_cluster == i)[0]
+            [single_cohort.append(CL_k[i]) for i in single_cohort_index]
+            mean_single_cohort = np.mean(single_cohort)
+            std_single_cohort = 0.5#np.std(single_cohort)
+            self.mean_cohort.append(mean_single_cohort)
+            self.std_cohort.append(std_single_cohort)
 
+            single_control_index = np.where(y_label_cluster == i+self.unsupervised_cluster_num)[0]
+            [single_control.append(CL_k[i]) for i in single_control_index]
+            mean_single_control = np.mean(single_control)
+            std_single_control = 0.5#np.std(single_control)
+            self.mean_control.append(mean_single_control)
+            self.std_control.append(std_single_control)
 
-        self.check_df = df
+            x_cohort = np.linspace(mean_single_cohort-3*std_single_cohort,mean_single_cohort+3*std_single_cohort,100)
+            plt.plot(x_cohort,norm.pdf(x_cohort,mean_single_cohort,std_single_cohort),'-', c="darkorange", linewidth=1.5)
+            x_control = np.linspace(mean_single_control-3*std_single_control,mean_single_control+3*std_single_control,100)
+            plt.plot(x_control,norm.pdf(x_control,mean_single_control,std_single_control),'-', c="cornflowerblue", linewidth=1.5)
 
-        sns.displot(df,x='Embedding',hue='label',kind='kde',palette=['b','b','b','r','r','r'])
+        #sns.displot(df,x='Embedding',hue='label',kind='kde',palette=['b','b','b','r','r','r'])
 
         #sns.displot(df, x='Embedding', hue='label', kind='kde', palette=['b','r'])
+        CL_k_fit = np.expand_dims(CL_k,1)
 
         train_lr_total,train_lr_label = shuffle(CL_k_fit,y_label, random_state=4)
         self.c_total = []
@@ -1021,13 +1140,9 @@ class protatype_ehr():
             x_vals = np.array([c,c])
             #x_vals = np.array([CL_k[:,0].min()-x_scale, CL_k[:,0].max()]+x_scale)
             #y_vals_1 = m * x_vals + c
-<<<<<<< HEAD
+
             y_vals = np.array([0,0.07])
             plt.plot(x_vals, y_vals, '--', c="black", linewidth=3)
-=======
-            y_vals = np.array([0,1])
-            plt.plot(x_vals, y_vals, '--', c="black", linewidth=1.5)
->>>>>>> 6332b4067a46cfdc4f7b209871d9beac15689a72
 
         #plt.ylim(0,1)
         #plt.xlim(0,1)
