@@ -136,9 +136,9 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
         #file_path = '/prj0129/tiw4003/Interpolate_data/'
-        file_path = '/Users/tingyi/Downloads/Interpolate_data/'
+        #file_path = '/Users/tingyi/Downloads/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -1055,8 +1055,12 @@ class protatype_ehr():
         #plt.ylim(0,1)
         #plt.xlim(0,1)
         plt.show()
+
+    def norm_distribution(self,x,mean,std):
+
+        return np.exp(-np.square(x-mean)/(2*np.square(std)))/(std*np.sqrt(2*np.pi))
      
-    def vis_distribution(self,number_vis,min_dist,c_num,train_num,scale):
+    def vis_distribution(self,number_vis,min_dist,c_num,train_num,scale,scale_offset):
         tcn_cohort_whole = self.tcn(self.memory_bank_cohort)
         tcn_control_whole = self.tcn(self.memory_bank_control)
 
@@ -1095,27 +1099,34 @@ class protatype_ehr():
         self.std_control = []
 
         sns.set_style("whitegrid")
+        #sns.set_theme()
         for i in range(self.unsupervised_cluster_num):
             single_cohort = []
             single_control = []
             single_cohort_index = np.where(y_label_cluster == i)[0]
             [single_cohort.append(CL_k[i]) for i in single_cohort_index]
             mean_single_cohort = np.mean(single_cohort)
-            std_single_cohort = 0.5#np.std(single_cohort)
+            std_single_cohort = np.std(single_cohort)
             self.mean_cohort.append(mean_single_cohort)
             self.std_cohort.append(std_single_cohort)
 
             single_control_index = np.where(y_label_cluster == i+self.unsupervised_cluster_num)[0]
             [single_control.append(CL_k[i]) for i in single_control_index]
             mean_single_control = np.mean(single_control)
-            std_single_control = 0.5#np.std(single_control)
+            std_single_control = np.std(single_control)
             self.mean_control.append(mean_single_control)
             self.std_control.append(std_single_control)
 
+        off_set = np.abs(np.mean(self.mean_cohort)-np.mean(self.mean_control))/scale_offset
+        for i in range(self.unsupervised_cluster_num):
+            mean_single_cohort = self.mean_cohort[i] - off_set
+            std_single_cohort = self.std_cohort[i]
+            mean_single_control = self.mean_control[i] + off_set
+            std_single_control = self.std_control[i]
             x_cohort = np.linspace(mean_single_cohort-3*std_single_cohort,mean_single_cohort+3*std_single_cohort,100)
-            plt.plot(x_cohort,norm.pdf(x_cohort,mean_single_cohort,std_single_cohort),'-', c="darkorange", linewidth=1.5)
+            plt.plot(x_cohort,self.norm_distribution(x_cohort,mean_single_cohort,std_single_cohort),'-', c="darkorange", linewidth=1.5)
             x_control = np.linspace(mean_single_control-3*std_single_control,mean_single_control+3*std_single_control,100)
-            plt.plot(x_control,norm.pdf(x_control,mean_single_control,std_single_control),'-', c="cornflowerblue", linewidth=1.5)
+            plt.plot(x_control,self.norm_distribution(x_control,mean_single_control,std_single_control),'-', c="cornflowerblue", linewidth=1.5)
 
         #sns.displot(df,x='Embedding',hue='label',kind='kde',palette=['b','b','b','r','r','r'])
 
@@ -1141,8 +1152,8 @@ class protatype_ehr():
             #x_vals = np.array([CL_k[:,0].min()-x_scale, CL_k[:,0].max()]+x_scale)
             #y_vals_1 = m * x_vals + c
 
-            y_vals = np.array([0,0.07])
-            plt.plot(x_vals, y_vals, '--', c="black", linewidth=3)
+            y_vals = np.array([0,1])
+            plt.plot(x_vals, y_vals, '--', c="black", linewidth=1)
 
         #plt.ylim(0,1)
         #plt.xlim(0,1)
