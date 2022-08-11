@@ -136,9 +136,9 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
         #file_path = '/prj0129/tiw4003/Interpolate_data/'
-        #file_path = '/Users/tingyi/Downloads/Interpolate_data/'
+        file_path = '/Users/tingyi/Downloads/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -872,8 +872,8 @@ class protatype_ehr():
                                                                      batch_embedding_control_project)
 
                     #loss = tf.cast(cl_loss_local_control,tf.float64)# + 0.4*tf.cast(mse_loss,tf.float64)
-                    loss = 0.3*cl_loss_local_control + 0.3*cl_loss_local_cohort + cl_loss
-                    #loss = cl_loss
+                    #loss = 0.3*cl_loss_local_control + 0.3*cl_loss_local_cohort + cl_loss
+                    loss = cl_loss
                     #if epoch % 2 == 1:
                         #loss =progression_loss
 
@@ -1093,13 +1093,28 @@ class protatype_ehr():
         #CL_k = np.array(tf.math.l2_normalize(CL_k, axis=-1))
         self.check_CL_k = CL_k
 
+        sns.set_style("whitegrid")
+        #sns.set_theme()
+
+        cohort_cl_mean = np.mean(CL_k[0:number_vis])
+        cohort_cl_std = np.std(CL_k[0:number_vis])
+
+        control_cl_mean = np.mean(CL_k[number_vis:])
+        control_cl_std = np.std(CL_k[number_vis:])
+
+        x_cohort = np.linspace(cohort_cl_mean-3*cohort_cl_std,cohort_cl_mean+3*cohort_cl_std,100)
+        plt.plot(x_cohort,self.norm_distribution(x_cohort,cohort_cl_mean,cohort_cl_std),'-', c="darkorange", linewidth=1.5)
+        x_control = np.linspace(control_cl_mean-3*control_cl_std,control_cl_mean+3*control_cl_std,100)
+        plt.plot(x_control,self.norm_distribution(x_control,control_cl_mean,control_cl_std),'-', c="cornflowerblue", linewidth=1.5)
+
+
+        """
         self.mean_cohort = []
         self.std_cohort = []
         self.mean_control = []
         self.std_control = []
 
-        sns.set_style("whitegrid")
-        #sns.set_theme()
+        
         for i in range(self.unsupervised_cluster_num):
             single_cohort = []
             single_control = []
@@ -1117,17 +1132,17 @@ class protatype_ehr():
             self.mean_control.append(mean_single_control)
             self.std_control.append(std_single_control)
 
-        off_set = np.abs(np.mean(self.mean_cohort)-np.mean(self.mean_control))/scale_offset
+        off_set = (np.mean(self.mean_cohort)-np.mean(self.mean_control))/scale_offset
         for i in range(self.unsupervised_cluster_num):
-            mean_single_cohort = self.mean_cohort[i] - off_set
+            mean_single_cohort = self.mean_cohort[i] + off_set
             std_single_cohort = self.std_cohort[i]
-            mean_single_control = self.mean_control[i] + off_set
+            mean_single_control = self.mean_control[i] - off_set
             std_single_control = self.std_control[i]
             x_cohort = np.linspace(mean_single_cohort-3*std_single_cohort,mean_single_cohort+3*std_single_cohort,100)
             plt.plot(x_cohort,self.norm_distribution(x_cohort,mean_single_cohort,std_single_cohort),'-', c="darkorange", linewidth=1.5)
             x_control = np.linspace(mean_single_control-3*std_single_control,mean_single_control+3*std_single_control,100)
             plt.plot(x_control,self.norm_distribution(x_control,mean_single_control,std_single_control),'-', c="cornflowerblue", linewidth=1.5)
-
+        """
         #sns.displot(df,x='Embedding',hue='label',kind='kde',palette=['b','b','b','r','r','r'])
 
         #sns.displot(df, x='Embedding', hue='label', kind='kde', palette=['b','r'])
