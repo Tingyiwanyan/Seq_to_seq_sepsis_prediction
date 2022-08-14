@@ -69,9 +69,9 @@ class protatype_ehr():
         self.vital_length = 8
         self.lab_length = 19
         self.blood_length = 27
-        self.epoch = 20
+        self.epoch = 9
         self.feature_num = 34
-        self.pre_train_epoch = 6
+        self.pre_train_epoch = 2
         self.latent_dim = latent_dim_global
         self.tau = 1
         self.time_sequence = 48#self.read_d.time_sequence
@@ -97,7 +97,7 @@ class protatype_ehr():
         """
         self.initializer_basis = tf.keras.initializers.Orthogonal(seed=4)
         self.offset_mu = self.initializer_basis(shape=(1,self.latent_dim))
-        self.offset_mu = np.array(self.offset_mu)[0]*0.1
+        self.offset_mu = np.array(self.offset_mu)[0]
 
         self.initializer_center1 = tf.keras.initializers.Orthogonal(seed=6)
         self.center_1 = self.initializer_center1(shape=(1,self.latent_dim))
@@ -136,9 +136,9 @@ class protatype_ehr():
         # self.test_data, self.test_logit,self.test_sofa,self.test_sofa_score = self.aquire_data(0, self.test_data, self.length_test)
         # self.val_data, self.val_logit,self.val_sofa,self.val_sofa_score = self.aquire_data(0, self.validate_data, self.length_val)
 
-        #file_path = '/home/tingyi/physionet_data/Interpolate_data/'
+        file_path = '/home/tingyi/physionet_data/Interpolate_data/'
         #file_path = '/prj0129/tiw4003/Interpolate_data/'
-        file_path = '/Users/tingyi/Downloads/Interpolate_data/'
+        #file_path = '/Users/tingyi/Downloads/Interpolate_data/'
         with open(file_path + 'train.npy', 'rb') as f:
             self.train_data = np.load(f)
         with open(file_path + 'train_logit.npy', 'rb') as f:
@@ -667,9 +667,17 @@ class protatype_ehr():
         self.bceloss = tf.keras.losses.BinaryCrossentropy()
         # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
         mse = tf.keras.losses.MeanSquaredError()
-
+        self.track_auc = []
+        self.track_auc_std = []
         for epoch in range(self.pre_train_epoch):
             print("\nStart of epoch %d" % (epoch,))
+
+            auc, std = self.eval_linear_classifier(200,5)
+            self.track_auc.append(auc)
+            self.track_auc_std.append(std)
+            print("auc is")
+            print(auc)
+            print(std)
 
             tcn_cohort_whole = self.tcn(self.memory_bank_cohort)
             tcn_control_whole = self.tcn(self.memory_bank_control)
@@ -726,6 +734,7 @@ class protatype_ehr():
 
 
             for step, (x_batch_train, y_batch_train, on_site_time, value_projection) in enumerate(self.train_dataset):
+
                 self.check_x_batch = x_batch_train
                 self.check_on_site_time = on_site_time
                 self.check_label = y_batch_train
@@ -888,6 +897,14 @@ class protatype_ehr():
                                               self.tcn.trainable_variables))#+ self.projection_layer.trainable_weights))
 
                 if step % 20 == 0:
+
+                    auc, std= self.eval_linear_classifier(200,5)
+                    self.track_auc.append(auc)
+                    self.track_auc_std.append(std)
+                    print("auc for lr")
+                    print(auc)
+                    print(std)
+
                     #if epoch == 0 or epoch % 2 == 0:
                     print("Training cl_loss cohort(for one batch) at step %d: %.4f"
                           % (step, float(cl_loss)))
@@ -900,41 +917,128 @@ class protatype_ehr():
                     #print(self.check_semantic_cluster_cohort)
 
                     self.loss_track.append(loss)
+        with open('cl_mean_200.npy','wb') as f:
+            np.save(f,np.array(self.track_auc))
+        with open('cl_std_200.npy','wb') as f:
+            np.save(f,np.array(self.track_auc_std))
+
+    def eval_linear_classifier(self,fit_num,eval_num):
+        auc_all = []
+        for i in range(eval_num):
+            tcn_cohort_whole = self.tcn(self.memory_bank_cohort[i*fit_num:(i+1)*fit_num])
+            tcn_control_whole = self.tcn(self.memory_bank_control[i*fit_num:(i+1)*fit_num])
+            on_site_extract_cohort_whole = [tcn_cohort_whole[j,
+                                            np.abs(int(self.memory_bank_cohort_on_site[j+i*fit_num] - 1)), :] for
+                                            j
+                                            in range(fit_num)]
+            on_site_extract_array_cohort_whole = tf.stack(on_site_extract_cohort_whole)
+
+            on_site_extract_control_whole = [tcn_control_whole[j,
+                                             np.abs(int(self.memory_bank_control_on_site[j+i*fit_num] - 1)), :]
+                                             for j
+                                             in range(fit_num)]
+
+            on_site_extract_array_control_whole = tf.stack(on_site_extract_control_whole)
+
+            cohort_vis = on_site_extract_array_cohort_whole
+
+            control_vis = on_site_extract_array_control_whole
+
+
+            y_label = np.zeros(2 * fit_num)
+            y_label[0:fit_num] = 1
+            vis_total = tf.concat([cohort_vis, control_vis], axis=0)
+            #vis_total = np.expand_dims(vis_total,1)
+            vis_total = np.array(vis_total)
+            self.check_vis_total = vis_total
+            train_lr_total, train_lr_label = shuffle(vis_total, y_label, random_state=4)
+
+            lr = LogisticRegression()
+            lr.fit(train_lr_total, train_lr_label)
+
+            tcn_temporal_output_val = self.tcn(self.val_data)
+            last_layer_output_val = tcn_temporal_output_val
+            on_site_extract_val = [last_layer_output_val[k, np.abs(int(self.val_on_site_time[k]) - 1), :] for k in
+                                   range(self.val_on_site_time.shape[0])]
+            on_site_extract_array_val = tf.stack(on_site_extract_val)
+
+            on_site_extract_array_val = np.array(on_site_extract_array_val)
+            prediction = lr.predict((on_site_extract_array_val))
+
+            self.check_prediction = prediction
+
+            auc = roc_auc_score(self.val_logit, prediction)
+            auc_all.append(auc)
+        auc_mean = np.mean(auc_all)
+        auc_std = np.std(auc_all)
+        return auc_mean, auc_std
+
+    def eval_fine_tune(self,fit_num,eval_num):
+        auc_all = []
+        for i in range(eval_num):
+
+            tcn_temporal_output_val = self.tcn(self.val_data[i*fit_num:(i+1)*fit_num])
+            last_layer_output_val = tcn_temporal_output_val
+            on_site_extract_val = [last_layer_output_val[j, np.abs(int(self.val_on_site_time[j+i*fit_num]) - 1), :] for j in
+                                   range(fit_num)]
+            on_site_extract_array_val = tf.stack(on_site_extract_val)
+
+            on_site_extract_array_val = np.array(on_site_extract_array_val)
+
+            prediction_val = self.projection_layer(on_site_extract_array_val)
+
+            auc = roc_auc_score(self.val_logit[i*fit_num:(i+1)*fit_num], prediction_val)
+            auc_all.append(auc)
+        auc_mean = np.mean(auc_all)
+        auc_std = np.std(auc_all)
+        return auc_mean, auc_std
+
+
+
+
 
 
     def train_standard(self):
         # input = layers.Input((self.time_sequence, self.feature_num))
-        self.tcn = self.tcn_encoder_second_last_level()
-        # tcn = self.tcn(input)
+        #self.tcn = self.tcn_encoder_second_last_level()
+        #tcn = self.tcn(input)
         self.auc_all = []
+        self.std_all = []
         self.loss_track = []
         # self.model_extractor = tf.keras.Model(input, tcn, name="time_extractor")
         self.projection_layer = self.project_logit()
         self.bceloss = tf.keras.losses.BinaryCrossentropy()
 
-        for epoch in range(self.pre_train_epoch):
+        for epoch in range(self.epoch):
             print("\nStart of epoch %d" % (epoch,))
 
             # extract_val, global_val,k = self.model_extractor(self.val_data)
+            """
             tcn_temporal_output_val = self.tcn(self.val_data)
-            last_layer_output_val = tcn_temporal_output_val[1]
+            last_layer_output_val = tcn_temporal_output_val
             on_site_extract_val = [last_layer_output_val[i, np.abs(int(self.val_on_site_time[i]) - 1), :] for i in
                                    range(self.val_on_site_time.shape[0])]
             on_site_extract_array_val = tf.stack(on_site_extract_val)
             prediction_val = self.projection_layer(on_site_extract_array_val)
             self.check_prediction_val = prediction_val
             val_acc = roc_auc_score(self.val_logit, prediction_val)
+            """
+            val_auc, val_std = self.eval_fine_tune(500,5)
+            self.auc_all.append(val_auc)
+            self.std_all.append(val_std)
             print("auc")
-            print(val_acc)
-            self.auc_all.append(val_acc)
-            for step, (x_batch_train, y_batch_train, on_site_time) in enumerate(self.train_dataset):
+            print(val_auc)
+            print(val_std)
+            self.auc_all.append(val_auc)
+            self.std_all.append(val_std)
+            for step, (x_batch_train, y_batch_train, on_site_time,kk) in enumerate(self.train_dataset):
                 self.check_x_batch = x_batch_train
                 self.check_on_site_time = on_site_time
                 self.check_label = y_batch_train
                 with tf.GradientTape() as tape:
                     tcn_temporal_output = self.tcn(x_batch_train)
                     self.check_output = tcn_temporal_output
-                    last_layer_output = tcn_temporal_output[1]
+                    last_layer_output = tcn_temporal_output
                     on_site_extract = [last_layer_output[i, int(on_site_time[i] - 1), :] for i in
                                        range(on_site_time.shape[0])]
                     on_site_extract_array = tf.stack(on_site_extract)
@@ -950,15 +1054,28 @@ class protatype_ehr():
                 optimizer.apply_gradients(zip(gradients,
                                               self.tcn.trainable_variables + self.projection_layer.trainable_weights))
 
-                if step % 20 == 0:
+                if step % 5 == 0:
                     print("Training loss(for one batch) at step %d: %.4f"
                           % (step, float(loss)))
                     print("seen so far: %s samples" % ((step + 1) * self.batch_size))
 
+                    val_auc, val_std = self.eval_fine_tune(200,5)
+                    print("auc")
+                    print(val_auc)
+                    print(val_std)
+                    self.auc_all.append(val_auc)
+                    self.std_all.append(val_std)
+
+
                     self.loss_track.append(loss)
 
+        with open('mean_finetune.npy','wb') as f:
+            np.save(f,np.array(self.auc_all))
+        with open('std_finetune.npy','wb') as f:
+            np.save(f,np.array(self.std_all))
 
-    def vis_hist(self,number_vis,min_dist,c_num,train_num,scale):
+
+    def vis_hist(self,number_vis,min_dist,scale,scale_offset,off_set_trans,bin_num,reverse):
         tcn_cohort_whole = self.tcn(self.memory_bank_cohort)
         tcn_control_whole = self.tcn(self.memory_bank_control)
 
@@ -987,6 +1104,20 @@ class protatype_ehr():
         self.check_vis_total = vis_total
 
         CL_k = np.squeeze(umap.UMAP(min_dist=min_dist,random_state=42,n_components=1).fit_transform(vis_total))/scale
+
+        off_set = (np.mean(CL_k[0:number_vis]) - np.mean(CL_k[number_vis:])) / scale_offset
+
+        CL_k[0:number_vis] = CL_k[0:number_vis] - off_set
+        CL_k[number_vis:] = CL_k[number_vis:] + off_set
+
+        CL_k = CL_k-off_set_trans
+
+        if reverse == 1:
+            mean_cl = np.mean(CL_k)
+            for i in range(CL_k.shape[0]):
+                CL_k[i] = mean_cl - (CL_k[i]-mean_cl)
+
+
         #CL_k = (CL_k - CL_k.min())/56
         #CL_k = np.array(tf.math.l2_normalize(CL_k, axis=-1))
         self.check_CL_k = CL_k
@@ -996,27 +1127,9 @@ class protatype_ehr():
         self.mean_control = []
         self.std_control = []
 
-        for i in range(self.unsupervised_cluster_num):
-            single_cohort = []
-            single_control = []
-            singel_cohort_index = np.where(y_label_cluster == i)[0]
-            [single_cohort.append(CL_k[i]) for i in single_cohort_index]
-            mean_single_cohort = np.mean(single_cohort)
-            std_single_cohort = np.std(single_cohort)
-            self.mean_cohort.append(mean_single_cohort)
-            self.std_cohort.append(std_single_cohort)
+        #CL_k_fit = np.expand_dims(CL_k,1)
 
-            single_control_index = np.where(y_label_cluster == i+self.unsupervised_cluster_num)[0]
-            [single_control.append(CL_k[i]) for i in single_control_index]
-            mean_single_control = np.mean(single_control)
-            std_single_control = np.std(single_control)
-            self.mean_control.append(mean_single_control)
-            self.std_control.append(std_single_control)
-
-
-        CL_k_fit = np.expand_dims(CL_k,1)
-
-        dataframe = np.transpose(np.stack([y_label_cluster,CL_k]))
+        dataframe = np.transpose(np.stack([y_label,CL_k]))
         #dataframe = np.transpose(np.stack([y_label, CL_k]))
         self.check_dataframe = dataframe
 
@@ -1026,32 +1139,33 @@ class protatype_ehr():
         self.check_df = df
         sns.set_style("whitegrid")
 
-        sns.displot(df,x='Embedding',hue='label',kind='kde',palette=['b','b','b','r','r','r'])
+        #sns.displot(df,x='Embedding',hue='label',kind='kde',palette=['b','b','b','r','r','r'])
 
-        #sns.displot(df, x='Embedding', hue='label', kind='kde', palette=['b','r'])
+        sns.histplot(df, x='Embedding', hue='label',  palette=['b','r'],bins=bin_num)
 
+        """
         train_lr_total,train_lr_label = shuffle(CL_k_fit,y_label, random_state=4)
         self.c_total = []
         for i in range(c_num):
             lr = LogisticRegression()
             lr.fit(train_lr_total[i*train_num:(i+1)*train_num], train_lr_label[i*train_num:(i+1)*train_num])
             #lr.fit(CL_k_fit, y_label)
-
+        
             b = lr.intercept_[0]
             w = lr.coef_[0][0]
             # Calculate the intercept and gradient of the decision boundary.
             c = -b / w
             self.c_total.append(c)
-
+        
             # ax = plt.gca()
             # ax.autoscale(True)
             x_vals = np.array([c,c])
             #x_vals = np.array([CL_k[:,0].min()-x_scale, CL_k[:,0].max()]+x_scale)
             #y_vals_1 = m * x_vals + c
-
+        
             y_vals = np.array([0,0.07])
             plt.plot(x_vals, y_vals, '--', c="black", linewidth=3)
-
+        """
         #plt.ylim(0,1)
         #plt.xlim(0,1)
         plt.show()
@@ -1095,7 +1209,7 @@ class protatype_ehr():
 
         sns.set_style("whitegrid")
         #sns.set_theme()
-
+        """
         cohort_cl_mean = np.mean(CL_k[0:number_vis])
         cohort_cl_std = np.std(CL_k[0:number_vis])
 
@@ -1142,7 +1256,7 @@ class protatype_ehr():
             plt.plot(x_cohort,self.norm_distribution(x_cohort,mean_single_cohort,std_single_cohort),'-', c="darkorange", linewidth=1.5)
             x_control = np.linspace(mean_single_control-3*std_single_control,mean_single_control+3*std_single_control,100)
             plt.plot(x_control,self.norm_distribution(x_control,mean_single_control,std_single_control),'-', c="cornflowerblue", linewidth=1.5)
-        """
+
         #sns.displot(df,x='Embedding',hue='label',kind='kde',palette=['b','b','b','r','r','r'])
 
         #sns.displot(df, x='Embedding', hue='label', kind='kde', palette=['b','r'])
